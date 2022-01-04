@@ -1,0 +1,6 @@
+[book]
+authors = ["Thomas Wehmöller"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Hua - Package Manager"
