@@ -3,9 +3,6 @@
 Every package that is installed in hua will be saved in the store. This allows different profiles
 to use the same store and dramatically simplifies our caching system. Also this opens up the
 possibility to use a local store accross multiple installations in the future.
-The Store is placed under `/hua/store` and every package is stored under firstly its package name
-like `/hua/store/firefox` and further is specified by its version number and hash:
-`/hua/store/firefox/95.0.1-pwiq2139q92s1m3rhefw310`. This allows us to uniquely identify each package.
 
 ## Commands
 

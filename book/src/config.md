@@ -15,7 +15,16 @@ In the following chapters both possibilites will always be shown.
 To incorparate the recent changes of youre configuration into the system run the following command:
 
 ```bash
-hua config update <boot | switch> <path to config.roc and config.lock>
+hua config update <boot | switch> config.roc config.lock
+```
+
+#### Create
+
+This will allow the user to choose between different templates they want to use for their own system config
+The template will be created in the current folder or a specified path.
+
+```
+hua config create <destination-path>?
 ```
 
 ---

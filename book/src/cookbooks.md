@@ -1,5 +1,16 @@
 # Cookbooks
 
+New Idea:
+Adding/removing a cookbook should not change the generation, as it declares only where the hua-cli will
+look for packages, but remote packages can all the time be installed nonetheless. Also instead of just
+relying on the file hierarchy we may just create a cookbook.roc file which includes all the packages
+and provides a function to allow search the cookbook for packages via their name. As packages are already
+uniquely identifiable due to their hash (wich is produced out of the hash of the recipe), we do not need 
+more information about the package for example where it was installed from. Multiple cookbooks could possibly
+contain the same package. The only information necessary in the generation is a package and its dependencies.
+Information in the generation should only be used when removing a package. When adding a package just newly information
+is added but none is read.
+
 ## Create youre own cookbook
 
 A cookbook is simply a folder which contains a list of recipe folders where every
@@ -36,7 +47,7 @@ extract it into the `/hua/cookbooks/` folder aswell as creating a new generation
 `generations/current/config/cookbooks.lock` file.
 
 ```bash
-hua cookbooks add <https | http | ssh>
+hua cookbooks add <https | http | ssh | local>
 ```
 
 #### Remove

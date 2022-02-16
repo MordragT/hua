@@ -9,13 +9,19 @@ hua install firefox-95.0.1
 ```
 
 This will create a new generation including the newly installed package.
+Each generation keeps track of the packages installed aswell as the cookbooks used to install the packages.
+These informations are stored under `generations/23/etc/hua/cookbooks.lock` and `generations/23/etc/hua/packages.lock`.
+All the contents of a package that is installed is just linked in the generation, but depending on the 
+configuration of the package specified in the recipe, some contents may also be copied.
 
 ## Commands
 
-All following commands are just aliases which omit the following prefix
+All following commands have an optional argument which specifies the profile
+context under which the command shall be executed. By default the current profile
+will be used. For example:
 
 ```bash
-hua profiles current generations ...
+hua generations list --profile system
 ```
 
 #### List
@@ -33,6 +39,11 @@ This will remove all generations older than a threshold, but the current generat
 ```bash
 hua generations remove <old(all except the current) | (number w(weeks) | d(days) | h(hours))>
 ```
+---
+
+Note:
+Local Cookbooks are somewhat incompatible with this backup and restore aproach. I propose to delete this
+feature as the system wide config offers a similar functionality
 
 #### Backup
 
