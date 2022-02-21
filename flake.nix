@@ -14,6 +14,7 @@
   in { overlay = overlay; } // utils.lib.eachDefaultSystem (system: let
     pkgs = nixpkgs.legacyPackages."${system}";
     naersk-lib = naersk.lib."${system}";
+    toolchain = fenix.packages.${system}.complete;
   in rec {
     # `nix build`
     packages.hua = import ./default.nix {
@@ -33,9 +34,13 @@
 
     # `nix develop`
     devShell = pkgs.mkShell {
+                
+      # RUST_SRC_PATH = "${complete.rust-src}/lib/rustlib/src/rust/src";
+        
       nativeBuildInputs = with pkgs; [
-        rustc
-        cargo
+        (toolchain.withComponents [
+          "cargo" "rustc" "rust-src" "rustfmt" "clippy"    
+        ])
         openssl
         pkgconfig
       ];

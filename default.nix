@@ -18,7 +18,7 @@ let
 in
 naersk-lib.buildPackage {
   pname = "hua";
-  root = ./hua-cli;
+  root = ./.;
   buildInputs = with pkgs; [
     openssl
     pkgconfig
