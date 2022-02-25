@@ -1,6 +1,6 @@
 use crate::error::*;
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct Package {
@@ -10,11 +10,11 @@ pub struct Package {
 }
 
 impl Package {
-    pub fn new(name: String, version: String, path: PathBuf) -> Self {
+    pub fn new<P: AsRef<Path>>(name: &str, version: &str, path: P) -> Self {
         Self {
-            name,
-            version,
-            path,
+            name: name.to_owned(),
+            version: version.to_owned(),
+            path: path.as_ref().to_owned(),
         }
     }
 
@@ -24,7 +24,7 @@ impl Package {
     }
 
     pub fn binary(&self) -> Option<PathBuf> {
-        let binary = self.path.join("/bin");
+        let binary = self.path.join("bin");
         if binary.exists() {
             Some(binary)
         } else {
@@ -33,7 +33,7 @@ impl Package {
     }
 
     pub fn config(&self) -> Option<PathBuf> {
-        let config = self.path.join("/cfg");
+        let config = self.path.join("cfg");
         if config.exists() {
             Some(config)
         } else {
@@ -42,7 +42,7 @@ impl Package {
     }
 
     pub fn library(&self) -> Option<PathBuf> {
-        let library = self.path.join("/lib");
+        let library = self.path.join("lib");
         if library.exists() {
             Some(library)
         } else {
@@ -51,7 +51,7 @@ impl Package {
     }
 
     pub fn share(&self) -> Option<PathBuf> {
-        let share = self.path.join("/share");
+        let share = self.path.join("share");
         if share.exists() {
             Some(share)
         } else {

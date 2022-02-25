@@ -1,14 +1,15 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::error::*;
 use crate::generation::GenerationManager;
+use crate::{error::*, ComponentPaths, Store};
 
 #[derive(Debug)]
 pub struct User {
-    pub name: String,
+    name: String,
     path: PathBuf,
-    pub generation_manager: GenerationManager,
+    generation_manager: GenerationManager,
 }
 
 impl User {
@@ -18,7 +19,9 @@ impl User {
             .into_string()?;
 
         let path = path.as_ref().join(&name);
-        fs::create_dir(&path)?;
+        if !path.exists() {
+            fs::create_dir(&path)?;
+        }
 
         let generation_manager = GenerationManager::create_under(&path)?;
 
@@ -27,5 +30,73 @@ impl User {
             path,
             generation_manager,
         })
+    }
+}
+
+pub struct UserManager {
+    path: PathBuf,
+    current: usize,
+    users: HashMap<usize, User>,
+}
+
+impl UserManager {
+    pub fn create_under<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let path = path.as_ref().join("user");
+        if !path.exists() {
+            fs::create_dir(&path)?;
+        }
+
+        let current = 0;
+        let user = User::create_under(&path)?;
+        let mut users = HashMap::new();
+        users.insert(current, user);
+
+        Ok(Self {
+            path,
+            current,
+            users,
+        })
+    }
+
+    fn get_current(&self) -> &User {
+        self.users
+            .get(&self.current)
+            .expect("The current user should always be present in the manager")
+    }
+
+    fn get_current_mut(&mut self) -> &mut User {
+        self.users
+            .get_mut(&self.current)
+            .expect("The current user should always be present in the manager")
+    }
+
+    pub fn insert_package(&mut self, hash: u64, store: &Store) -> Result<()> {
+        self.get_current_mut()
+            .generation_manager
+            .insert_package(hash, store)
+    }
+
+    pub fn remove_generation(&mut self, id: usize) -> Result<()> {
+        self.get_current_mut()
+            .generation_manager
+            .remove_generation(id)
+    }
+
+    pub fn link_global(&self, id: usize, global_paths: ComponentPaths) -> Result<()> {
+        self.get_current()
+            .generation_manager
+            .link_global(id, global_paths)
+    }
+
+    pub fn link_current_global(&self, global_paths: ComponentPaths) -> Result<()> {
+        self.get_current()
+            .generation_manager
+            .link_current_global(global_paths)
+    }
+
+    pub fn list_current_packages(&self) {
+        self.get_current()
+            .generation_manager
+            .list_current_packages();
     }
 }

@@ -1,2 +1,6 @@
 /target/
 Cargo.lock
+/hua/
+/package/
+/global/
+/hello-world/

@@ -1,13 +1,12 @@
 use std::{ffi::OsString, io};
 
-use crate::package::Package;
-
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub enum Error {
-    GenerationNotExistent(usize),
-    PackageAlreadyPresent(Package),
+    GenerationNotFound(usize),
+    GenerationAlreadyPresent(usize),
+    PackageAlreadyPresent(u64),
     PackageNotFound(u64),
     TerminatingPath,
     UsernameNotFound,
@@ -20,7 +19,11 @@ impl std::error::Error for Error {}
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::GenerationNotExistent(id) => f.write_str(&format!(
+            Self::GenerationAlreadyPresent(id) => f.write_str(&format!(
+                "The generation with the following id is already present: {}",
+                id
+            )),
+            Self::GenerationNotFound(id) => f.write_str(&format!(
                 "The generation with the following id is not existent: {}",
                 id
             )),

@@ -1,4 +1,4 @@
-use crate::{error::*, package::Package};
+use crate::{error::*, extra, package::Package, UserManager};
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     fs::{self},
@@ -15,8 +15,12 @@ pub struct Store {
 
 impl Store {
     pub fn create_under<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let path = path.as_ref().join("/store");
-        fs::create_dir(&path)?;
+        let path = path.as_ref().join("store");
+
+        if !path.exists() {
+            fs::create_dir(&path)?;
+        }
+
         Ok(Self {
             path,
             packages: HashMap::new(),
@@ -34,36 +38,29 @@ impl Store {
         // consider using another one like sha2 or blake3
         package.name.hash(&mut self.hasher);
         package.version.hash(&mut self.hasher);
-        hash_path(&package.path, &mut self.hasher)?;
+        extra::hash_path(&package.path, &mut self.hasher)?;
         let hash = self.hasher.finish();
 
         let name_version_hash = format!("{}-{}-{}", &package.name, &package.version, hash);
 
         let destination = self.path.join(name_version_hash);
-        fs::create_dir(&destination)?;
+        if !destination.exists() {
+            fs::create_dir(&destination)?;
 
-        let _number_of_files = fs::copy(&package.path, &destination)?;
-        package.path = destination;
+            extra::copy_to(&package.path, &destination)?;
+            package.path = destination;
 
-        if let Some(p) = self.packages.insert(hash, package) {
-            Err(Error::PackageAlreadyPresent(p))
+            if let Some(_) = self.packages.insert(hash, package) {
+                Err(Error::PackageAlreadyPresent(hash))
+            } else {
+                Ok(())
+            }
         } else {
-            Ok(())
+            Err(Error::PackageAlreadyPresent(hash))
         }
     }
-}
 
-fn hash_path<P: AsRef<Path>, H: Hasher>(path: P, state: &mut H) -> Result<()> {
-    let path = path.as_ref();
-    if path.is_dir() {
-        path.read_dir()?
-            .map(|res| match res {
-                Ok(entry) => hash_path(entry.path(), state),
-                Err(e) => Err(e.into()),
-            })
-            .collect::<Result<()>>()
-    } else {
-        fs::read(path)?.hash(state);
-        Ok(())
+    pub fn remove_unused(&mut self, user_manager: &UserManager) -> Result<()> {
+        todo!()
     }
 }
