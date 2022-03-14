@@ -1,4 +1,4 @@
-use crate::error::*;
+use crate::{error::*, ComponentPaths, OptionalComponentPaths};
 use std::{
     fs,
     hash::{Hash, Hasher},
@@ -67,6 +67,41 @@ pub fn link_into<P: AsRef<Path>, Q: AsRef<Path>>(from: P, into: Q) -> Result<()>
 
 pub fn link_to<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<()> {
     io_operation_to(from, to, &symlink)
+}
+
+/// Links one component paths into another
+/// Creates the directories of the destination if they do not exist
+pub fn link_component_paths(from: &ComponentPaths, to: &ComponentPaths) -> Result<()> {
+    to.create_dirs()?;
+
+    link_to(&from.binary, &to.binary)?;
+    link_to(&from.config, &to.config)?;
+    link_to(&from.library, &to.library)?;
+    link_to(&from.share, &to.share)?;
+    Ok(())
+}
+
+/// Links optional component paths to normal component paths
+/// Creates the directories of the destination if they do not exist
+pub fn link_optional_component_paths(
+    from: &OptionalComponentPaths,
+    to: &ComponentPaths,
+) -> Result<()> {
+    to.create_dirs()?;
+
+    if let Some(p) = &from.binary {
+        link_to(&p, &to.binary)?;
+    }
+    if let Some(p) = &from.config {
+        link_to(&p, &to.config)?;
+    }
+    if let Some(p) = &from.library {
+        link_to(&p, &to.library)?;
+    }
+    if let Some(p) = &from.share {
+        link_to(&p, &to.share)?;
+    }
+    Ok(())
 }
 
 fn copy(from: &Path, to: &Path) -> std::io::Result<()> {

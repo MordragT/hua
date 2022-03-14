@@ -1,7 +1,10 @@
+#![feature(let_chains)]
+
 mod error;
 mod extra;
 mod generation;
 mod package;
+mod persist;
 mod store;
 mod user;
 
@@ -52,6 +55,51 @@ impl ComponentPaths {
         }
         if !self.share.exists() {
             fs::create_dir(&self.share)?;
+        }
+        Ok(())
+    }
+}
+
+pub struct OptionalComponentPaths {
+    pub binary: Option<PathBuf>,
+    pub config: Option<PathBuf>,
+    pub library: Option<PathBuf>,
+    pub share: Option<PathBuf>,
+}
+
+impl OptionalComponentPaths {
+    pub fn new<T, U, V, W>(
+        binary: Option<T>,
+        config: Option<U>,
+        library: Option<V>,
+        share: Option<W>,
+    ) -> Self
+    where
+        T: AsRef<Path>,
+        U: AsRef<Path>,
+        V: AsRef<Path>,
+        W: AsRef<Path>,
+    {
+        Self {
+            binary: binary.map(|p| p.as_ref().to_owned()),
+            config: config.map(|p| p.as_ref().to_owned()),
+            library: library.map(|p| p.as_ref().to_owned()),
+            share: share.map(|p| p.as_ref().to_owned()),
+        }
+    }
+
+    pub fn create_dirs(&self) -> io::Result<()> {
+        if let Some(p) = &self.binary && !p.exists() {
+            fs::create_dir(&p)?;
+        }
+        if let Some(p) = &self.config && !p.exists() {
+            fs::create_dir(&p)?;
+        }
+        if let Some(p) = &self.library && !p.exists() {
+            fs::create_dir(&p)?;
+        }
+        if let Some(p) = &self.share && !p.exists() {
+            fs::create_dir(&p)?;
         }
         Ok(())
     }

@@ -38,31 +38,15 @@ impl Generation {
         })
     }
 
-    pub fn link_packages(&mut self, packages: &[u64], store: &Store) -> Result<()> {
-        packages
-            .into_iter()
-            .map(|hash| self.link_package(*hash, store))
-            .collect::<Result<()>>()
+    pub fn link_package(&mut self, hash: &u64, store: &mut Store) -> Result<()> {
+        let mut hashes = store.link_package(hash, &self.component_paths)?;
+        self.packages.append(&mut hashes);
+        Ok(())
     }
 
-    pub fn link_package(&mut self, hash: u64, store: &Store) -> Result<()> {
-        let package = store.get(hash).ok_or(Error::PackageNotFound(hash))?;
-
-        if let Some(binary) = package.binary() {
-            extra::link_into(binary, &self.path)?;
-        }
-        if let Some(config) = package.config() {
-            extra::link_into(config, &self.path)?;
-        }
-        if let Some(library) = package.library() {
-            extra::link_into(library, &self.path)?;
-        }
-        if let Some(share) = package.share() {
-            extra::link_into(share, &self.path)?;
-        }
-
-        self.packages.push(hash);
-
+    pub fn link_packages(&mut self, hashes: &[u64], store: &mut Store) -> Result<()> {
+        let mut hashes = store.link_packages(hashes, &self.component_paths)?;
+        self.packages.append(&mut hashes);
         Ok(())
     }
 

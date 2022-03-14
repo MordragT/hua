@@ -1,8 +1,8 @@
-use crate::error::*;
+use crate::{error::*, OptionalComponentPaths};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
 pub struct Package {
     pub name: String,
     pub version: String,
@@ -21,6 +21,10 @@ impl Package {
     pub fn name_version_hash(&self) -> Result<String> {
         let path_str = self.path.to_str().ok_or(Error::OsStringConversion)?;
         Ok(format!("{}-{}-{}", self.name, self.version, path_str))
+    }
+
+    pub fn optional_component_paths(&self) -> OptionalComponentPaths {
+        OptionalComponentPaths::new(self.binary(), self.config(), self.library(), self.share())
     }
 
     pub fn binary(&self) -> Option<PathBuf> {

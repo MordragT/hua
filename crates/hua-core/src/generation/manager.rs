@@ -52,7 +52,7 @@ impl GenerationManager {
         }
     }
 
-    pub fn insert_package(&mut self, hash: u64, store: &Store) -> Result<()> {
+    pub fn insert_package(&mut self, hash: &u64, store: &mut Store) -> Result<()> {
         let id = self.list.len();
         let mut gen = Generation::create_under(&self.path, id)?;
 
@@ -66,6 +66,10 @@ impl GenerationManager {
         Ok(())
     }
 
+    pub fn packages(&self) -> impl Iterator<Item = &u64> {
+        self.list.iter().flat_map(|(_id, gen)| &gen.packages)
+    }
+
     pub fn list_current_packages(&self) {
         self.get_current().list_packages();
     }
@@ -73,7 +77,7 @@ impl GenerationManager {
     pub fn switch_to(&mut self, id: usize) -> Result<()> {
         if self.list.contains_key(&id) {
             self.current = id;
-            // TODO switch symlinks
+
             Ok(())
         } else {
             Err(Error::GenerationNotFound(id))

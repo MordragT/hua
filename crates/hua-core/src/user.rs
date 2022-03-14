@@ -40,11 +40,9 @@ pub struct UserManager {
 }
 
 impl UserManager {
-    pub fn create_under<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let path = path.as_ref().join("user");
-        if !path.exists() {
-            fs::create_dir(&path)?;
-        }
+    pub fn create_at_path<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let path = path.as_ref();
+        fs::create_dir(&path)?;
 
         let current = 0;
         let user = User::create_under(&path)?;
@@ -52,10 +50,19 @@ impl UserManager {
         users.insert(current, user);
 
         Ok(Self {
-            path,
+            path: path.to_owned(),
             current,
             users,
         })
+    }
+
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let path = path.as_ref();
+        if !path.exists() {
+            return Err(Error::PathNotFound(path.to_owned()));
+        }
+
+        todo!()
     }
 
     fn get_current(&self) -> &User {
@@ -70,7 +77,7 @@ impl UserManager {
             .expect("The current user should always be present in the manager")
     }
 
-    pub fn insert_package(&mut self, hash: u64, store: &Store) -> Result<()> {
+    pub fn insert_package(&mut self, hash: &u64, store: &mut Store) -> Result<()> {
         self.get_current_mut()
             .generation_manager
             .insert_package(hash, store)
@@ -98,5 +105,11 @@ impl UserManager {
         self.get_current()
             .generation_manager
             .list_current_packages();
+    }
+
+    pub fn packages(&self) -> impl Iterator<Item = &u64> {
+        self.users
+            .iter()
+            .flat_map(|(_id, user)| user.generation_manager.packages())
     }
 }
