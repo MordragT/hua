@@ -2,10 +2,16 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use rustbreak::PathDatabase;
+use serde::{Deserialize, Serialize};
+
 use crate::generation::GenerationManager;
+use crate::persist::Pot;
 use crate::{error::*, ComponentPaths, Store};
 
-#[derive(Debug)]
+pub const USERS_DB: &str = "users.db";
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct User {
     name: String,
     path: PathBuf,
@@ -33,10 +39,26 @@ impl User {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct Users {
+    pub current: usize,
+    pub list: HashMap<usize, User>,
+}
+
+impl Users {
+    pub fn create_under<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let current = 0;
+        let mut list = HashMap::new();
+        let user = User::create_under(path.as_ref())?;
+        list.insert(current, user);
+
+        Ok(Self { current, list })
+    }
+}
+
 pub struct UserManager {
     path: PathBuf,
-    current: usize,
-    users: HashMap<usize, User>,
+    database: PathDatabase<Users, Pot>,
 }
 
 impl UserManager {
@@ -44,15 +66,12 @@ impl UserManager {
         let path = path.as_ref();
         fs::create_dir(&path)?;
 
-        let current = 0;
-        let user = User::create_under(&path)?;
-        let mut users = HashMap::new();
-        users.insert(current, user);
+        let database =
+            PathDatabase::create_at_path(path.join(USERS_DB), Users::create_under(&path)?)?;
 
         Ok(Self {
             path: path.to_owned(),
-            current,
-            users,
+            database,
         })
     }
 
@@ -62,54 +81,65 @@ impl UserManager {
             return Err(Error::PathNotFound(path.to_owned()));
         }
 
-        todo!()
+        let database = PathDatabase::load_from_path(path.join(USERS_DB))?;
+
+        Ok(Self {
+            path: path.to_owned(),
+            database,
+        })
     }
 
-    fn get_current(&self) -> &User {
-        self.users
-            .get(&self.current)
-            .expect("The current user should always be present in the manager")
+    fn read_current<R, T: FnOnce(&User) -> R>(&self, task: T) -> Result<R> {
+        let res = self.database.read(|db| {
+            let current = db
+                .list
+                .get(&db.current)
+                .expect("The current user should always be present in the manager");
+            task(current)
+        })?;
+        Ok(res)
     }
 
-    fn get_current_mut(&mut self) -> &mut User {
-        self.users
-            .get_mut(&self.current)
-            .expect("The current user should always be present in the manager")
+    fn write_current<R, T: FnOnce(&mut User) -> R>(&self, task: T) -> Result<R> {
+        let res = self.database.write(|db| {
+            let current = db
+                .list
+                .get_mut(&db.current)
+                .expect("The current user should always be present in the manager");
+            task(current)
+        })?;
+        Ok(res)
     }
 
     pub fn insert_package(&mut self, hash: &u64, store: &mut Store) -> Result<()> {
-        self.get_current_mut()
-            .generation_manager
-            .insert_package(hash, store)
+        self.write_current(|user| user.generation_manager.insert_package(hash, store))?
     }
 
     pub fn remove_generation(&mut self, id: usize) -> Result<()> {
-        self.get_current_mut()
-            .generation_manager
-            .remove_generation(id)
+        self.write_current(|user| user.generation_manager.remove_generation(id))?
     }
 
     pub fn link_global(&self, id: usize, global_paths: ComponentPaths) -> Result<()> {
-        self.get_current()
-            .generation_manager
-            .link_global(id, global_paths)
+        self.read_current(|user| user.generation_manager.link_global(id, global_paths))?
     }
 
     pub fn link_current_global(&self, global_paths: ComponentPaths) -> Result<()> {
-        self.get_current()
-            .generation_manager
-            .link_current_global(global_paths)
+        self.read_current(|user| user.generation_manager.link_current_global(global_paths))?
     }
 
-    pub fn list_current_packages(&self) {
-        self.get_current()
-            .generation_manager
-            .list_current_packages();
+    pub fn list_current_packages(&self) -> Result<()> {
+        self.read_current(|user| user.generation_manager.list_current_packages())?;
+        Ok(())
     }
 
-    pub fn packages(&self) -> impl Iterator<Item = &u64> {
-        self.users
-            .iter()
-            .flat_map(|(_id, user)| user.generation_manager.packages())
+    pub fn contains_package(&self, hash: &u64) -> Result<bool> {
+        let res = self.database.read(|db| {
+            db.list
+                .iter()
+                .flat_map(|(_id, user)| user.generation_manager.packages())
+                .find(|key| *key == hash)
+                .is_some()
+        })?;
+        Ok(res)
     }
 }

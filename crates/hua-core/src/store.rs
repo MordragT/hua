@@ -43,8 +43,6 @@ impl Packages {
 pub struct Store {
     path: PathBuf,
     database: PathDatabase<Packages, Pot>,
-    // packages: PathDatabase<HashMap<u64, Package>, Pot>,
-    // relations: PathDatabase<DiGraphMap<u64, Weight>, Pot>,
     // TODO package is hashed by its name version and contents
     // But with the crc32 32-bit width packages might collide
     // with 80.000 packages probabilty of 80.000/2^32 ~ 0.002%
@@ -86,7 +84,8 @@ impl Store {
         })
     }
 
-    pub fn read<R, T: FnOnce(&HashMap<u64, Package>) -> R>(&self, task: T) -> Result<R> {
+    /// Dispatch a task over all the packages stored
+    pub fn read_packages<R, T: FnOnce(&HashMap<u64, Package>) -> R>(&self, task: T) -> Result<R> {
         let res = self.database.read(|packages| task(&packages.map))?;
         Ok(res)
     }
@@ -150,6 +149,7 @@ impl Store {
         Ok(())
     }
 
+    /// Add a package as a child (dependency) of another package
     pub fn add_child(&mut self, parent: &u64, mut package: Package) -> Result<()> {
         let hash = self.hash_package(&package)?;
         let old_path = self.update_package_path(&mut package, hash);
@@ -180,6 +180,7 @@ impl Store {
         Ok(())
     }
 
+    /// Add a package as a parent of another package(dependency)
     pub fn add_parent(&mut self, child: &u64, mut package: Package) -> Result<()> {
         let hash = self.hash_package(&mut package)?;
         let old_path = self.update_package_path(&mut package, hash);
@@ -268,17 +269,14 @@ impl Store {
         Ok(res)
     }
 
+    /// Remove all packages that are currently unused in all generations
     pub fn remove_unused(&mut self, user_manager: &UserManager) -> Result<()> {
         let to_remove = self.database.read(|db| {
             let to_remove = db
                 .map
                 .iter()
                 .filter_map(|(key, package)| {
-                    if user_manager
-                        .packages()
-                        .find(|installed| *installed == key)
-                        .is_none()
-                    {
+                    if let Ok(res) = user_manager.contains_package(key) && res {
                         Some((*key, package.path.clone()))
                     } else {
                         None

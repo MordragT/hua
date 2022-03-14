@@ -16,10 +16,11 @@ use std::{
 pub use error::Error;
 pub use generation::*;
 pub use package::Package;
+use serde::{Deserialize, Serialize};
 pub use store::Store;
 pub use user::*;
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ComponentPaths {
     pub binary: PathBuf,
     pub config: PathBuf,
@@ -60,6 +61,7 @@ impl ComponentPaths {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct OptionalComponentPaths {
     pub binary: Option<PathBuf>,
     pub config: Option<PathBuf>,

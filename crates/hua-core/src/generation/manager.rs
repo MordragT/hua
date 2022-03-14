@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{error::*, extra, Generation};
 use crate::{ComponentPaths, Store};
 use std::collections::HashMap;
@@ -6,7 +8,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct GenerationManager {
     path: PathBuf,
     current: usize,

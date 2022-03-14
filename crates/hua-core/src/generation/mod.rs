@@ -1,4 +1,5 @@
 pub use manager::GenerationManager;
+use serde::{Deserialize, Serialize};
 
 use crate::{error::*, extra};
 use crate::{ComponentPaths, Store};
@@ -9,7 +10,7 @@ use std::{
 
 mod manager;
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Generation {
     path: PathBuf,
     packages: Vec<u64>,
