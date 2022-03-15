@@ -7,10 +7,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::generation::GenerationManager;
 use crate::persist::Pot;
-use crate::{error::*, ComponentPaths, Store};
+use crate::{error::*, extra::ComponentPaths, Store};
 
 pub const USERS_DB: &str = "users.db";
 
+/// A single User who owns several generations.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct User {
     name: String,
@@ -19,6 +20,7 @@ pub struct User {
 }
 
 impl User {
+    /// Create a new user directory under the given path.
     pub fn create_under<P: AsRef<Path>>(path: P) -> Result<Self> {
         let name = users::get_current_username()
             .ok_or(Error::UsernameNotFound)?
@@ -56,12 +58,15 @@ impl Users {
     }
 }
 
+/// Manages all users.
 pub struct UserManager {
     path: PathBuf,
     database: PathDatabase<Users, Pot>,
 }
 
 impl UserManager {
+    /// Create a new user manager under the given path.
+    /// Returns an error if the path is already present.
     pub fn create_at_path<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
         fs::create_dir(&path)?;
@@ -75,6 +80,7 @@ impl UserManager {
         })
     }
 
+    /// Opens an old user manager under the given path.
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
         if !path.exists() {
@@ -111,27 +117,46 @@ impl UserManager {
         Ok(res)
     }
 
+    /// Inserts a package into the current user.
+    /// By doing that a new generation is created.
     pub fn insert_package(&mut self, hash: &u64, store: &mut Store) -> Result<()> {
         self.write_current(|user| user.generation_manager.insert_package(hash, store))?
     }
 
+    /// Removes a package.
+    /// By doing so, a new generation without the package is created.
+    pub fn remove_package(&mut self, hash: &u64, store: &mut Store) -> Result<()> {
+        self.write_current(|user| user.generation_manager.remove_package(hash, store))?
+    }
+
+    /// Removes the specified generation.
     pub fn remove_generation(&mut self, id: usize) -> Result<()> {
         self.write_current(|user| user.generation_manager.remove_generation(id))?
     }
 
+    /// Links all packages of the specified generation into the specified paths.
     pub fn link_global(&self, id: usize, global_paths: ComponentPaths) -> Result<()> {
         self.read_current(|user| user.generation_manager.link_global(id, global_paths))?
     }
 
+    /// Links all packages of the current generation into the specified paths.
     pub fn link_current_global(&self, global_paths: ComponentPaths) -> Result<()> {
         self.read_current(|user| user.generation_manager.link_current_global(global_paths))?
     }
 
+    /// Lists all packages in the current generation.
     pub fn list_current_packages(&self) -> Result<()> {
         self.read_current(|user| user.generation_manager.list_current_packages())?;
         Ok(())
     }
 
+    /// Lists all generations
+    pub fn list_current_generations(&self) -> Result<()> {
+        self.read_current(|user| user.generation_manager.list_generations())?;
+        Ok(())
+    }
+
+    /// Checks wether the package is stored inside any generation of all users.
     pub fn contains_package(&self, hash: &u64) -> Result<bool> {
         let res = self.database.read(|db| {
             db.list
@@ -141,5 +166,13 @@ impl UserManager {
                 .is_some()
         })?;
         Ok(res)
+    }
+
+    // TODO maybe flush just after every io operation
+
+    /// Flushes all data to the backend
+    pub fn flush(&self) -> Result<()> {
+        self.database.save()?;
+        Ok(())
     }
 }

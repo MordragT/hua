@@ -9,3 +9,5 @@ edition = "2021"
 members = ["crates/*"]
 
 [dependencies]
+clap = "3.1"
+hua-core = { path = "crates/hua-core" }

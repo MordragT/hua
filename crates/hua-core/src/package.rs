@@ -1,4 +1,4 @@
-use crate::{error::*, OptionalComponentPaths};
+use crate::{error::*, extra::OptionalComponentPaths};
 use std::fmt;
 use std::path::{Path, PathBuf};
 

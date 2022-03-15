@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{error::*, extra, Generation};
-use crate::{ComponentPaths, Store};
-use std::collections::HashMap;
+use crate::{extra::ComponentPaths, Store};
+use std::collections::{HashMap, HashSet};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -11,8 +11,10 @@ use std::{
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct GenerationManager {
     path: PathBuf,
+    counter: usize,
     current: usize,
     list: HashMap<usize, Generation>,
+    global_linked: HashSet<PathBuf>,
 }
 
 impl GenerationManager {
@@ -30,7 +32,9 @@ impl GenerationManager {
         Ok(Self {
             path,
             current,
+            counter: 0,
             list,
+            global_linked: HashSet::new(),
         })
     }
 
@@ -48,23 +52,48 @@ impl GenerationManager {
     }
 
     pub fn remove_generation(&mut self, id: usize) -> Result<()> {
-        match self.list.remove(&id) {
-            Some(gen) => Ok(fs::remove_dir_all(gen.path)?),
-            None => Err(Error::GenerationNotFound(id)),
+        if id == self.current {
+            Err(Error::GenerationIsInUse)
+        } else {
+            match self.list.remove(&id) {
+                Some(gen) => Ok(fs::remove_dir_all(gen.path)?),
+                None => Err(Error::GenerationNotFound(id)),
+            }
         }
     }
 
     pub fn insert_package(&mut self, hash: &u64, store: &mut Store) -> Result<()> {
-        let id = self.list.len();
-        let mut gen = Generation::create_under(&self.path, id)?;
+        self.counter += 1;
+        let mut gen = Generation::create_under(&self.path, self.counter)?;
 
         gen.link_packages(self.get_current().packages(), store)?;
         gen.link_package(hash, store)?;
 
-        let old = self.list.insert(id, gen);
+        let old = self.list.insert(self.counter, gen);
         assert!(old.is_none());
 
-        self.current = id;
+        self.current = self.counter;
+        Ok(())
+    }
+
+    pub fn remove_package(&mut self, hash: &u64, store: &mut Store) -> Result<()> {
+        self.counter += 1;
+        let mut gen = Generation::create_under(&self.path, self.counter)?;
+
+        let to_remove = store.get_children(hash)?;
+        let packages = self
+            .get_current()
+            .packages()
+            .difference(&to_remove)
+            .map(|hash| *hash)
+            .collect::<HashSet<u64>>();
+
+        gen.link_packages(&packages, store)?;
+
+        let old = self.list.insert(self.counter, gen);
+        assert!(old.is_none());
+
+        self.current = self.counter;
         Ok(())
     }
 
@@ -74,6 +103,12 @@ impl GenerationManager {
 
     pub fn list_current_packages(&self) {
         self.get_current().list_packages();
+    }
+
+    pub fn list_generations(&self) {
+        for (key, gen) in self.list.iter() {
+            println!("Generation {}\n{}\n", key, gen);
+        }
     }
 
     pub fn switch_to(&mut self, id: usize) -> Result<()> {

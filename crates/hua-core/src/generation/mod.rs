@@ -1,10 +1,11 @@
 pub use manager::GenerationManager;
 use serde::{Deserialize, Serialize};
 
-use crate::{error::*, extra};
-use crate::{ComponentPaths, Store};
+use crate::error::*;
+use crate::{extra::ComponentPaths, Store};
+use std::collections::HashSet;
 use std::{
-    fs,
+    fmt, fs,
     path::{Path, PathBuf},
 };
 
@@ -13,8 +14,18 @@ mod manager;
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Generation {
     path: PathBuf,
-    packages: Vec<u64>,
+    packages: HashSet<u64>,
     component_paths: ComponentPaths,
+}
+
+impl fmt::Display for Generation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&format!(
+            "Path: {:#?}\nNumber of packages: {}",
+            self.path,
+            self.packages.len()
+        ))
+    }
 }
 
 impl Generation {
@@ -34,20 +45,32 @@ impl Generation {
 
         Ok(Self {
             path,
-            packages: Vec::new(),
+            packages: HashSet::new(),
             component_paths,
         })
     }
 
     pub fn link_package(&mut self, hash: &u64, store: &mut Store) -> Result<()> {
         let mut hashes = store.link_package(hash, &self.component_paths)?;
-        self.packages.append(&mut hashes);
+        let packages = self
+            .packages
+            .union(&mut hashes)
+            .map(|hash| *hash)
+            .collect::<HashSet<u64>>();
+        self.packages = packages;
+
         Ok(())
     }
 
-    pub fn link_packages(&mut self, hashes: &[u64], store: &mut Store) -> Result<()> {
+    pub fn link_packages(&mut self, hashes: &HashSet<u64>, store: &mut Store) -> Result<()> {
         let mut hashes = store.link_packages(hashes, &self.component_paths)?;
-        self.packages.append(&mut hashes);
+        let packages = self
+            .packages
+            .union(&mut hashes)
+            .map(|hash| *hash)
+            .collect::<HashSet<u64>>();
+        self.packages = packages;
+
         Ok(())
     }
 
@@ -55,7 +78,7 @@ impl Generation {
         println!("{:#?}", self.packages);
     }
 
-    pub fn packages(&self) -> &Vec<u64> {
+    pub fn packages(&self) -> &HashSet<u64> {
         &self.packages
     }
 

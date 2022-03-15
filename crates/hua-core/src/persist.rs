@@ -1,4 +1,4 @@
-use rustbreak::{DeSerError, DeSerializer};
+use rustbreak::DeSerializer;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Default)]

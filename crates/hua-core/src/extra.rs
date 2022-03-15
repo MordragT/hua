@@ -1,12 +1,16 @@
-use crate::{error::*, ComponentPaths, OptionalComponentPaths};
+use serde::{Deserialize, Serialize};
+
+use crate::error::*;
 use std::{
     fs,
     hash::{Hash, Hasher},
+    io,
     os::unix,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 // TODO: better naming
+// TODO io_operations should be able to return something (like when linking the linked paths)
 
 pub fn io_operation_into<P, Q, F>(from: P, into: Q, operation: &F) -> Result<()>
 where
@@ -119,6 +123,7 @@ pub fn copy_to<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<()> {
     io_operation_to(from, to, &copy)
 }
 
+/// Calculates a hash with all the files under the given path
 pub fn hash_path<P: AsRef<Path>, H: Hasher>(path: P, state: &mut H) -> Result<()> {
     let path = path.as_ref();
     if path.is_dir() {
@@ -130,6 +135,103 @@ pub fn hash_path<P: AsRef<Path>, H: Hasher>(path: P, state: &mut H) -> Result<()
             .collect::<Result<()>>()
     } else {
         fs::read(path)?.hash(state);
+        Ok(())
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ComponentPaths {
+    pub binary: PathBuf,
+    pub config: PathBuf,
+    pub library: PathBuf,
+    pub share: PathBuf,
+}
+
+impl ComponentPaths {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Self {
+        let path = path.as_ref();
+        Self {
+            binary: path.join("bin"),
+            config: path.join("cfg"),
+            library: path.join("lib"),
+            share: path.join("share"),
+        }
+    }
+
+    pub fn new<T, U, V, W>(binary: T, config: U, library: V, share: W) -> Self
+    where
+        T: AsRef<Path>,
+        U: AsRef<Path>,
+        V: AsRef<Path>,
+        W: AsRef<Path>,
+    {
+        Self {
+            binary: binary.as_ref().to_owned(),
+            config: config.as_ref().to_owned(),
+            library: library.as_ref().to_owned(),
+            share: share.as_ref().to_owned(),
+        }
+    }
+
+    pub fn create_dirs(&self) -> io::Result<()> {
+        if !self.binary.exists() {
+            fs::create_dir(&self.binary)?;
+        }
+        if !self.config.exists() {
+            fs::create_dir(&self.config)?;
+        }
+        if !self.library.exists() {
+            fs::create_dir(&self.library)?;
+        }
+        if !self.share.exists() {
+            fs::create_dir(&self.share)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct OptionalComponentPaths {
+    pub binary: Option<PathBuf>,
+    pub config: Option<PathBuf>,
+    pub library: Option<PathBuf>,
+    pub share: Option<PathBuf>,
+}
+
+impl OptionalComponentPaths {
+    pub fn new<T, U, V, W>(
+        binary: Option<T>,
+        config: Option<U>,
+        library: Option<V>,
+        share: Option<W>,
+    ) -> Self
+    where
+        T: AsRef<Path>,
+        U: AsRef<Path>,
+        V: AsRef<Path>,
+        W: AsRef<Path>,
+    {
+        Self {
+            binary: binary.map(|p| p.as_ref().to_owned()),
+            config: config.map(|p| p.as_ref().to_owned()),
+            library: library.map(|p| p.as_ref().to_owned()),
+            share: share.map(|p| p.as_ref().to_owned()),
+        }
+    }
+
+    pub fn create_dirs(&self) -> io::Result<()> {
+        if let Some(p) = &self.binary && !p.exists() {
+            fs::create_dir(&p)?;
+        }
+        if let Some(p) = &self.config && !p.exists() {
+            fs::create_dir(&p)?;
+        }
+        if let Some(p) = &self.library && !p.exists() {
+            fs::create_dir(&p)?;
+        }
+        if let Some(p) = &self.share && !p.exists() {
+            fs::create_dir(&p)?;
+        }
         Ok(())
     }
 }

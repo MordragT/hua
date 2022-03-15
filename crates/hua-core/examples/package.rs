@@ -1,6 +1,6 @@
 use std::{fs, thread::sleep_ms};
 
-use hua_core::*;
+use hua_core::{extra::ComponentPaths, *};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     fs::create_dir("hua")?;
@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     user_manager.insert_package(&hello_world_hash, &mut store)?;
     user_manager.remove_generation(0)?;
-    user_manager.list_current_packages();
+    user_manager.list_current_packages()?;
 
     fs::create_dir("global")?;
     let global_paths =
@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     user_manager.link_current_global(global_paths)?;
 
-    sleep_ms(5000);
+    sleep_ms(2000);
 
     store.remove_unused(&user_manager)?;
 
