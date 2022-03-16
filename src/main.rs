@@ -108,17 +108,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             let hash = store.insert(package)?;
             user_manager.insert_package(&hash, &mut store)?;
 
-            println!("success 1");
-
             let global_paths = ComponentPaths::from_path(GLOBAL_PATH);
-            user_manager.link_current_global(global_paths)?;
-
-            println!("success 2");
+            user_manager.switch_global_links(&global_paths)?;
 
             store.flush()?;
             user_manager.flush()?;
-
-            println!("success 3");
         }
         Some(("remove", sub_matches)) => {
             let name = sub_matches
@@ -135,7 +129,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             user_manager.remove_package(&hash, &mut store)?;
 
             let global_paths = ComponentPaths::from_path(GLOBAL_PATH);
-            user_manager.link_current_global(global_paths)?;
+            user_manager.switch_global_links(&global_paths)?;
 
             store.flush()?;
             user_manager.flush()?;

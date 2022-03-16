@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::*;
 use std::{
+    collections::HashSet,
     fs,
     hash::{Hash, Hasher},
     io,
@@ -12,19 +13,40 @@ use std::{
 // TODO: better naming
 // TODO io_operations should be able to return something (like when linking the linked paths)
 
-pub fn io_operation_into<P, Q, F>(from: P, into: Q, operation: &F) -> Result<()>
+pub fn io_task_into<P, Q, T, R, F, C>(from: P, into: Q, task: &T, fold: &F) -> Result<C>
 where
     P: AsRef<Path>,
     Q: AsRef<Path>,
-    F: Fn(&Path, &Path) -> std::io::Result<()>,
+    T: Fn(&Path, &Path) -> std::io::Result<R>,
+    R: Eq + Hash,
+    F: Fn(&mut C, R),
+    C: Default,
 {
-    let from = from.as_ref().canonicalize()?;
+    let mut collector = C::default();
+    inner_io_task_into(from.as_ref(), into.as_ref(), task, fold, &mut collector)?;
+    Ok(collector)
+}
+
+fn inner_io_task_into<R, T, F, C>(
+    from: &Path,
+    into: &Path,
+    task: &T,
+    fold: &F,
+    collector: &mut C,
+) -> Result<()>
+where
+    T: Fn(&Path, &Path) -> std::io::Result<R>,
+    R: Eq + Hash,
+    F: Fn(&mut C, R),
+    C: Default,
+{
+    let from = from.canonicalize()?;
     let name = from
         .file_name()
         .ok_or(Error::TerminatingPath)?
         .to_str()
         .ok_or(Error::OsStringConversion)?;
-    let into = into.as_ref().join(name);
+    let into = into.join(name);
 
     if from.is_dir() {
         from.read_dir()?
@@ -33,94 +55,183 @@ where
                     if !into.exists() {
                         fs::create_dir(&into)?;
                     }
-                    io_operation_into(entry.path(), &into, operation)
+                    inner_io_task_into(&entry.path(), &into, task, fold, collector)
                 }
                 Err(e) => Err(e.into()),
             })
             .collect::<Result<()>>()
     } else {
-        operation(&from, &into)?;
+        fold(collector, task(&from, &into)?);
         Ok(())
     }
 }
 
-pub fn io_operation_to<P, Q, F>(from: P, to: Q, operation: &F) -> Result<()>
+pub fn io_task_to<P, Q, T, R, F, C>(from: P, to: Q, task: &T, fold: &F) -> Result<C>
 where
     P: AsRef<Path>,
     Q: AsRef<Path>,
-    F: Fn(&Path, &Path) -> std::io::Result<()>,
+    T: Fn(&Path, &Path) -> std::io::Result<R>,
+    R: Eq + Hash,
+    F: Fn(&mut C, R),
+    C: Default,
 {
-    let from = from.as_ref();
+    let mut collector = C::default();
+    inner_io_task_to(from.as_ref(), to.as_ref(), task, fold, &mut collector)?;
+    Ok(collector)
+}
+
+fn inner_io_task_to<T, R, F, C>(
+    from: &Path,
+    to: &Path,
+    task: &T,
+    fold: &F,
+    collector: &mut C,
+) -> Result<()>
+where
+    T: Fn(&Path, &Path) -> std::io::Result<R>,
+    R: Eq + Hash,
+    F: Fn(&mut C, R),
+    C: Default,
+{
     let contents = from.read_dir()?;
     contents
         .map(|res| match res {
-            Ok(entry) => io_operation_into(entry.path(), to.as_ref(), operation),
+            Ok(entry) => inner_io_task_into(&entry.path(), to, task, fold, collector),
             Err(e) => Err(e.into()),
         })
         .collect::<Result<()>>()
 }
 
-fn symlink(original: &Path, link: &Path) -> std::io::Result<()> {
-    unix::fs::symlink(original, link)
+fn symlink(original: &Path, link: &Path) -> std::io::Result<PathBuf> {
+    unix::fs::symlink(original, link)?;
+    Ok(link.to_owned())
+}
+
+fn fold_hash_set_path_buf(collector: &mut HashSet<PathBuf>, path_buf: PathBuf) {
+    collector.insert(path_buf);
 }
 
 /// Creates links inside the destination corresponding to the file structure of the origin
-pub fn link_into<P: AsRef<Path>, Q: AsRef<Path>>(from: P, into: Q) -> Result<()> {
-    io_operation_into(from, into, &symlink)
+/// Returns a list of all links created
+pub fn link_into<P: AsRef<Path>, Q: AsRef<Path>>(from: P, into: Q) -> Result<HashSet<PathBuf>> {
+    io_task_into(from, into, &symlink, &fold_hash_set_path_buf)
 }
 
-pub fn link_to<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<()> {
-    io_operation_to(from, to, &symlink)
+/// Links all files in source to the destination
+/// Returns a list of all links created
+pub fn link_to<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<HashSet<PathBuf>> {
+    io_task_to(from, to, &symlink, &fold_hash_set_path_buf)
 }
 
 /// Links one component paths into another
 /// Creates the directories of the destination if they do not exist
-pub fn link_component_paths(from: &ComponentPaths, to: &ComponentPaths) -> Result<()> {
+/// Returns a list of all links created
+pub fn link_component_paths(
+    from: &ComponentPaths,
+    to: &ComponentPaths,
+) -> Result<HashSet<PathBuf>> {
     to.create_dirs()?;
+    let mut collector = HashSet::new();
 
-    link_to(&from.binary, &to.binary)?;
-    link_to(&from.config, &to.config)?;
-    link_to(&from.library, &to.library)?;
-    link_to(&from.share, &to.share)?;
-    Ok(())
+    inner_io_task_to(
+        &from.binary,
+        &to.binary,
+        &symlink,
+        &fold_hash_set_path_buf,
+        &mut collector,
+    )?;
+    inner_io_task_to(
+        &from.config,
+        &to.config,
+        &symlink,
+        &fold_hash_set_path_buf,
+        &mut collector,
+    )?;
+    inner_io_task_to(
+        &from.library,
+        &to.library,
+        &symlink,
+        &fold_hash_set_path_buf,
+        &mut collector,
+    )?;
+    inner_io_task_to(
+        &from.share,
+        &to.share,
+        &symlink,
+        &fold_hash_set_path_buf,
+        &mut collector,
+    )?;
+
+    Ok(collector)
 }
 
 /// Links optional component paths to normal component paths
 /// Creates the directories of the destination if they do not exist
+/// Returns a list of all links created
 pub fn link_optional_component_paths(
     from: &OptionalComponentPaths,
     to: &ComponentPaths,
-) -> Result<()> {
+) -> Result<HashSet<PathBuf>> {
     to.create_dirs()?;
 
+    let mut collector = HashSet::new();
+
     if let Some(p) = &from.binary {
-        link_to(&p, &to.binary)?;
+        inner_io_task_to(
+            &p,
+            &to.binary,
+            &symlink,
+            &fold_hash_set_path_buf,
+            &mut collector,
+        )?;
     }
     if let Some(p) = &from.config {
-        link_to(&p, &to.config)?;
+        inner_io_task_to(
+            &p,
+            &to.config,
+            &symlink,
+            &fold_hash_set_path_buf,
+            &mut collector,
+        )?;
     }
     if let Some(p) = &from.library {
-        link_to(&p, &to.library)?;
+        inner_io_task_to(
+            &p,
+            &to.library,
+            &symlink,
+            &fold_hash_set_path_buf,
+            &mut collector,
+        )?;
     }
     if let Some(p) = &from.share {
-        link_to(&p, &to.share)?;
+        inner_io_task_to(
+            &p,
+            &to.share,
+            &symlink,
+            &fold_hash_set_path_buf,
+            &mut collector,
+        )?;
     }
-    Ok(())
+
+    Ok(collector)
 }
 
-fn copy(from: &Path, to: &Path) -> std::io::Result<()> {
-    let _num = fs::copy(from, to)?;
-    Ok(())
+fn copy(from: &Path, to: &Path) -> std::io::Result<u64> {
+    fs::copy(from, to)
+}
+
+fn fold_u64(collector: &mut u64, val: u64) {
+    *collector += val;
 }
 
 /// Copies the origin inside the destination
-pub fn copy_into<P: AsRef<Path>, Q: AsRef<Path>>(from: P, into: Q) -> Result<()> {
-    io_operation_into(from, into, &copy)
+pub fn copy_into<P: AsRef<Path>, Q: AsRef<Path>>(from: P, into: Q) -> Result<u64> {
+    io_task_into(from, into, &copy, &fold_u64)
 }
 
 /// Copies the content of the origin inside the destination
-pub fn copy_to<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<()> {
-    io_operation_to(from, to, &copy)
+pub fn copy_to<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<u64> {
+    io_task_to(from, to, &copy, &fold_u64)
 }
 
 /// Calculates a hash with all the files under the given path

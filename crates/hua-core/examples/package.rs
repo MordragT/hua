@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ComponentPaths::new("global/bin", "global/etc", "global/lib", "global/share");
     global_paths.create_dirs()?;
 
-    user_manager.link_current_global(global_paths)?;
+    user_manager.switch_global_links(&global_paths)?;
 
     sleep_ms(2000);
 

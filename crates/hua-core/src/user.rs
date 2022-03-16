@@ -134,14 +134,9 @@ impl UserManager {
         self.write_current(|user| user.generation_manager.remove_generation(id))?
     }
 
-    /// Links all packages of the specified generation into the specified paths.
-    pub fn link_global(&self, id: usize, global_paths: ComponentPaths) -> Result<()> {
-        self.read_current(|user| user.generation_manager.link_global(id, global_paths))?
-    }
-
-    /// Links all packages of the current generation into the specified paths.
-    pub fn link_current_global(&self, global_paths: ComponentPaths) -> Result<()> {
-        self.read_current(|user| user.generation_manager.link_current_global(global_paths))?
+    /// Unlinks the old generation and links the new one globally
+    pub fn switch_global_links(&mut self, global_paths: &ComponentPaths) -> Result<()> {
+        self.write_current(|user| user.generation_manager.switch_global_links(global_paths))?
     }
 
     /// Lists all packages in the current generation.

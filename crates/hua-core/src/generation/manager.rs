@@ -14,7 +14,7 @@ pub struct GenerationManager {
     counter: usize,
     current: usize,
     list: HashMap<usize, Generation>,
-    global_linked: HashSet<PathBuf>,
+    global_links: HashSet<PathBuf>,
 }
 
 impl GenerationManager {
@@ -34,21 +34,35 @@ impl GenerationManager {
             current,
             counter: 0,
             list,
-            global_linked: HashSet::new(),
+            global_links: HashSet::new(),
         })
     }
 
-    pub fn link_current_global(&self, global_paths: ComponentPaths) -> Result<()> {
+    fn unlink_global(&mut self) -> Result<()> {
+        for link in self.global_links.drain() {
+            fs::remove_file(link)?;
+        }
+
+        Ok(())
+    }
+
+    fn link_current_global(&mut self, global_paths: &ComponentPaths) -> Result<()> {
         self.link_global(self.current, global_paths)
     }
 
-    pub fn link_global(&self, id: usize, global_paths: ComponentPaths) -> Result<()> {
+    fn link_global(&mut self, id: usize, global_paths: &ComponentPaths) -> Result<()> {
         let gen = self.list.get(&id).ok_or(Error::GenerationNotFound(id))?;
-        extra::link_to(gen.binary(), global_paths.binary)?;
-        extra::link_to(gen.config(), global_paths.config)?;
-        extra::link_to(gen.library(), global_paths.library)?;
-        extra::link_to(gen.share(), global_paths.share)?;
+        self.global_links = extra::link_component_paths(gen.component_paths(), global_paths)?;
         Ok(())
+    }
+
+    pub fn switch_global_links(&mut self, global_paths: &ComponentPaths) -> Result<()> {
+        self.unlink_global()?;
+        self.link_current_global(global_paths)
+    }
+
+    pub fn global_links(&self) -> &HashSet<PathBuf> {
+        &self.global_links
     }
 
     pub fn remove_generation(&mut self, id: usize) -> Result<()> {
@@ -80,7 +94,9 @@ impl GenerationManager {
         self.counter += 1;
         let mut gen = Generation::create_under(&self.path, self.counter)?;
 
-        let to_remove = store.get_children(hash)?;
+        let mut to_remove = store.get_children(hash)?;
+        to_remove.insert(*hash);
+
         let packages = self
             .get_current()
             .packages()

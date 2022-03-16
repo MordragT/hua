@@ -86,19 +86,23 @@ impl Generation {
         self.packages.contains(&hash)
     }
 
-    pub fn binary(&self) -> &Path {
-        self.component_paths.binary.as_path()
+    pub fn component_paths(&self) -> &ComponentPaths {
+        &self.component_paths
     }
 
-    pub fn config(&self) -> &Path {
-        self.component_paths.config.as_path()
-    }
+    // pub fn binary(&self) -> &Path {
+    //     self.component_paths.binary.as_path()
+    // }
 
-    pub fn library(&self) -> &Path {
-        self.component_paths.library.as_path()
-    }
+    // pub fn config(&self) -> &Path {
+    //     self.component_paths.config.as_path()
+    // }
 
-    pub fn share(&self) -> &Path {
-        self.component_paths.share.as_path()
-    }
+    // pub fn library(&self) -> &Path {
+    //     self.component_paths.library.as_path()
+    // }
+
+    // pub fn share(&self) -> &Path {
+    //     self.component_paths.share.as_path()
+    // }
 }

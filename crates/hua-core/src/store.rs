@@ -281,7 +281,7 @@ impl Store {
                 .map
                 .iter()
                 .filter_map(|(key, package)| {
-                    if let Ok(res) = user_manager.contains_package(key) && res {
+                    if let Ok(res) = user_manager.contains_package(key) && !res {
                         Some((*key, package.path.clone()))
                     } else {
                         None
