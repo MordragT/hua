@@ -13,7 +13,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const PACKAGES_DB: &str = "packages.db";
+/// The filename of the packages database of the store
+pub const PACKAGES_DB: &str = "packages.db";
 
 // TODO create Store Trait, so that the local store and the cache can be used interchangable
 
@@ -275,7 +276,7 @@ impl Store {
     }
 
     /// Remove all packages that are currently unused in all generations.
-    pub fn remove_unused(&mut self, user_manager: &UserManager) -> Result<()> {
+    pub fn remove_unused(&mut self, user_manager: &UserManager) -> Result<HashSet<u64>> {
         let to_remove = self.database.read(|db| {
             let to_remove = db
                 .map
@@ -297,10 +298,10 @@ impl Store {
             fs::remove_dir_all(path)?;
         }
 
-        let to_remove_keys = to_remove.into_keys();
+        let to_remove_keys = to_remove.into_keys().collect::<HashSet<u64>>();
 
         self.database.write(|db| {
-            for key in to_remove_keys {
+            for key in to_remove_keys.iter() {
                 let res = db.map.remove(&key);
                 assert!(res.is_some());
 
@@ -313,7 +314,7 @@ impl Store {
             }
         })?;
 
-        Ok(())
+        Ok(to_remove_keys)
     }
 
     /// Searches the store for the given name and do a specified task on them.
@@ -361,5 +362,209 @@ impl Store {
     pub fn flush(&self) -> Result<()> {
         self.database.save()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        collections::HashSet,
+        fs::{self, File},
+        path::Path,
+    };
+
+    use temp_dir::TempDir;
+
+    use crate::{extra::ComponentPaths, Package, Store, UserManager};
+
+    use super::PACKAGES_DB;
+
+    fn store_create_at_path(path: &Path) -> Store {
+        let store = Store::create_at_path(&path).unwrap();
+
+        let store_db = path.join(PACKAGES_DB);
+
+        assert!(store_db.exists());
+        assert!(store_db.is_file());
+
+        store
+    }
+
+    fn package(path: &Path, name: &str) -> Package {
+        let package_bin_path = path.join("bin");
+        fs::create_dir_all(&package_bin_path).unwrap();
+
+        let _bin = File::create(package_bin_path.join(&format!("{}.sh", name))).unwrap();
+        Package::new(name, "0.1.0", &path)
+    }
+
+    #[test]
+    fn store_create_at_path_ok() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.child("store");
+        let _store = store_create_at_path(&path);
+    }
+
+    #[test]
+    fn store_create_at_path_err() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.child("store");
+        fs::create_dir(&path).unwrap();
+
+        let res = Store::create_at_path(&path);
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn store_open_ok() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.child("store");
+        let _store = store_create_at_path(&path);
+
+        let _store = Store::open(&path).unwrap();
+    }
+
+    #[test]
+    fn store_open_err() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.child("store");
+
+        let res = Store::open(&path);
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn store_insert() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.child("store");
+        let package_path = temp_dir.child("package");
+
+        let mut store = store_create_at_path(&path);
+        let package = package(&package_path, "package");
+
+        let hash = store.insert(package).unwrap();
+
+        let children = store.get_children(&hash).unwrap();
+
+        assert!(children.is_empty());
+    }
+
+    #[test]
+    fn store_add_child() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.child("store");
+        let parent_path = temp_dir.child("parent");
+        let child_path = temp_dir.child("child");
+
+        let mut store = store_create_at_path(&path);
+
+        let parent = package(&parent_path, "parent");
+        let parent_hash = store.insert(parent).unwrap();
+
+        let child = package(&child_path, "child");
+        let child_hash = store.add_child(&parent_hash, child).unwrap();
+
+        let children = store.get_children(&parent_hash).unwrap();
+
+        assert_eq!(children.len(), 1);
+        assert!(children.get(&child_hash).is_some())
+    }
+
+    #[test]
+    fn store_add_parent() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.child("store");
+        let parent_path = temp_dir.child("parent");
+        let child_path = temp_dir.child("child");
+
+        let mut store = store_create_at_path(&path);
+
+        let child = package(&child_path, "child");
+        let child_hash = store.insert(child).unwrap();
+
+        let parent = package(&parent_path, "parent");
+        let parent_hash = store.add_parent(&child_hash, parent).unwrap();
+
+        let children = store.get_children(&parent_hash).unwrap();
+
+        assert_eq!(children.len(), 1);
+        assert!(children.get(&child_hash).is_some());
+    }
+
+    #[test]
+    fn store_remove_unused() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.child("store");
+        let pkg_path = temp_dir.child("package");
+        let pkg_two_path = temp_dir.child("package2");
+        let user_manager_path = temp_dir.child("user");
+
+        let mut store = store_create_at_path(&path);
+        let pkg = package(&pkg_path, "package");
+        let pkg_two = package(&pkg_two_path, "package2");
+
+        let hash = store.insert(pkg).unwrap();
+        let hash_two = store.insert(pkg_two).unwrap();
+
+        let mut user_manager = UserManager::create_at_path(&user_manager_path).unwrap();
+        assert!(user_manager.insert_package(&hash, &mut store).unwrap());
+
+        let removed = store.remove_unused(&mut user_manager).unwrap();
+
+        assert_eq!(removed.len(), 1);
+        assert!(removed.get(&hash_two).is_some());
+    }
+
+    #[test]
+    fn store_remove_unused_empty() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.child("store");
+        let user_manager_path = temp_dir.child("user");
+
+        let mut store = store_create_at_path(&path);
+        let mut user_manager = UserManager::create_at_path(&user_manager_path).unwrap();
+
+        let removed = store.remove_unused(&mut user_manager).unwrap();
+
+        assert_eq!(removed.len(), 0);
+    }
+
+    #[test]
+    fn store_link_package() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.child("store");
+        let parent_path = temp_dir.child("parent");
+        let child_path = temp_dir.child("child");
+
+        let mut store = store_create_at_path(&path);
+
+        let parent = package(&parent_path, "parent");
+        let parent_hash = store.insert(parent).unwrap();
+
+        let child = package(&child_path, "child");
+        let child_hash = store.add_child(&parent_hash, child).unwrap();
+
+        let global_temp_path = temp_dir.child("global");
+        fs::create_dir(&global_temp_path).unwrap();
+        let global_paths = ComponentPaths::from_path(&global_temp_path);
+        global_paths.create_dirs().unwrap();
+
+        let linked = store.link_package(&parent_hash, &global_paths).unwrap();
+        assert_eq!(linked.len(), 2);
+
+        let mut eq_linked = HashSet::new();
+        eq_linked.insert(child_hash);
+        eq_linked.insert(parent_hash);
+        assert_eq!(linked, eq_linked);
+
+        let child_bin_link = global_paths.binary.join("child.sh");
+        assert!(child_bin_link.exists());
+        assert!(child_bin_link.is_symlink());
+
+        let parent_bin_link = global_paths.binary.join("parent.sh");
+        assert!(parent_bin_link.exists());
+        assert!(parent_bin_link.is_symlink());
     }
 }

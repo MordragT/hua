@@ -355,23 +355,7 @@ mod tests {
     #[test]
     fn user_manager_contains_package_true() {
         let temp_dir = TempDir::new().unwrap();
-        let path = temp_dir.child("user");
-        let store_path = temp_dir.child("store");
-
-        let package = {
-            let package_path = temp_dir.child("package");
-            let package_bin_path = package_path.join("bin");
-            fs::create_dir_all(&package_bin_path).unwrap();
-
-            let _bin = File::create(package_bin_path.join("package.sh")).unwrap();
-            Package::new("package", "0.1.0", &package_path)
-        };
-
-        let mut store = Store::create_at_path(&store_path).unwrap();
-        let hash = store.insert(package).unwrap();
-
-        let mut user_manager = UserManager::create_at_path(&path).unwrap();
-        user_manager.insert_package(&hash, &mut store).unwrap();
+        let (user_manager, _, hash) = user_manager_insert_package(&temp_dir);
 
         let res = user_manager.contains_package(&hash).unwrap();
 

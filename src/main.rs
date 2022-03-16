@@ -67,7 +67,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             Some(("collect-garbage", _)) => {
                 let mut store = Store::open(STORE_PATH)?;
                 let user_manager = UserManager::open(USER_MANAGER_PATH)?;
-                store.remove_unused(&user_manager)?;
+                let removed = store.remove_unused(&user_manager)?;
+                println!("{} packages were removed.", removed.len());
                 store.flush()?;
             }
             _ => unreachable!(),
