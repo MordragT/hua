@@ -65,52 +65,63 @@ impl GenerationManager {
         &self.global_links
     }
 
-    pub fn remove_generation(&mut self, id: usize) -> Result<()> {
+    pub fn remove_generation(&mut self, id: usize) -> Result<bool> {
         if id == self.current {
             Err(Error::GenerationIsInUse)
         } else {
             match self.list.remove(&id) {
-                Some(gen) => Ok(fs::remove_dir_all(gen.path)?),
-                None => Err(Error::GenerationNotFound(id)),
+                Some(gen) => {
+                    fs::remove_dir_all(gen.path)?;
+                    Ok(true)
+                }
+                None => Ok(false),
             }
         }
     }
 
-    pub fn insert_package(&mut self, hash: &u64, store: &mut Store) -> Result<()> {
-        self.counter += 1;
-        let mut gen = Generation::create_under(&self.path, self.counter)?;
+    pub fn insert_package(&mut self, hash: &u64, store: &mut Store) -> Result<bool> {
+        if self.get_current().contains(hash) {
+            Ok(false)
+        } else {
+            self.counter += 1;
+            let mut gen = Generation::create_under(&self.path, self.counter)?;
 
-        gen.link_packages(self.get_current().packages(), store)?;
-        gen.link_package(hash, store)?;
+            gen.link_packages(self.get_current().packages(), store)?;
+            gen.link_package(hash, store)?;
 
-        let old = self.list.insert(self.counter, gen);
-        assert!(old.is_none());
+            let old = self.list.insert(self.counter, gen);
+            assert!(old.is_none());
 
-        self.current = self.counter;
-        Ok(())
+            self.current = self.counter;
+            Ok(true)
+        }
     }
 
-    pub fn remove_package(&mut self, hash: &u64, store: &mut Store) -> Result<()> {
-        self.counter += 1;
-        let mut gen = Generation::create_under(&self.path, self.counter)?;
+    pub fn remove_package(&mut self, hash: &u64, store: &mut Store) -> Result<bool> {
+        if self.get_current().contains(hash) {
+            self.counter += 1;
+            let mut gen = Generation::create_under(&self.path, self.counter)?;
 
-        let mut to_remove = store.get_children(hash)?;
-        to_remove.insert(*hash);
+            let mut to_remove = store.get_children(hash)?;
+            to_remove.insert(*hash);
 
-        let packages = self
-            .get_current()
-            .packages()
-            .difference(&to_remove)
-            .map(|hash| *hash)
-            .collect::<HashSet<u64>>();
+            let packages = self
+                .get_current()
+                .packages()
+                .difference(&to_remove)
+                .map(|hash| *hash)
+                .collect::<HashSet<u64>>();
 
-        gen.link_packages(&packages, store)?;
+            gen.link_packages(&packages, store)?;
 
-        let old = self.list.insert(self.counter, gen);
-        assert!(old.is_none());
+            let old = self.list.insert(self.counter, gen);
+            assert!(old.is_none());
 
-        self.current = self.counter;
-        Ok(())
+            self.current = self.counter;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
     pub fn packages(&self) -> impl Iterator<Item = &u64> {

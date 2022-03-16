@@ -82,8 +82,8 @@ impl Generation {
         &self.packages
     }
 
-    pub fn contains(&self, hash: u64) -> bool {
-        self.packages.contains(&hash)
+    pub fn contains(&self, hash: &u64) -> bool {
+        self.packages.contains(hash)
     }
 
     pub fn component_paths(&self) -> &ComponentPaths {
