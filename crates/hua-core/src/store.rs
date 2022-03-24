@@ -1,9 +1,13 @@
-use crate::{error::*, extra, extra::ComponentPaths, package::Package, persist::Pot, UserManager};
+use crate::{
+    components::ComponentPaths, error::*, extra, package::Package, persist::Pot, Requirement,
+    UserManager,
+};
 use bimap::BiMap;
 use crc32fast::Hasher as Crc32Hasher;
 use daggy::{Dag, NodeIndex};
 use petgraph::visit::Walker;
 use rustbreak::PathDatabase;
+use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 
 use std::{
@@ -16,26 +20,144 @@ use std::{
 /// The filename of the packages database of the store
 pub const PACKAGES_DB: &str = "packages.db";
 
-// TODO create Store Trait, so that the local store and the cache can be used interchangable
-
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default)]
-struct Weight;
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct Packages {
-    pub map: HashMap<u64, Package>,
-    pub relations: Dag<Weight, Weight, usize>,
-    pub hash_idx_map: BiMap<u64, NodeIndex<usize>>,
+pub struct Packages {
+    nodes: HashMap<u64, Package>,
+    relations: Dag<Version, u64, usize>,
+    indices: BiMap<u64, NodeIndex<usize>>,
+    requirements: HashMap<u64, Requirement>,
 }
 
 impl Packages {
     pub fn new() -> Self {
         Self {
-            map: HashMap::new(),
+            nodes: HashMap::new(),
             relations: Dag::new(),
-            hash_idx_map: BiMap::new(),
+            indices: BiMap::new(),
+            requirements: HashMap::new(),
         }
     }
+
+    pub fn search(&self, name: &str) -> Option<&Package> {
+        self.nodes.iter().find_map(|(_, package)| {
+            if package.name.starts_with(name) {
+                Some(package)
+            } else {
+                None
+            }
+        })
+    }
+
+    // pub fn remove(&mut self, hash: &u64) -> Option<Package> {
+    //     self.nodes.remove(hash)
+    // }
+
+    pub fn get(&self, hash: &u64) -> Option<&Package> {
+        self.nodes.get(hash)
+    }
+
+    // pub fn get_children(&self, hash: &u64) -> Option<HashSet<u64>> {
+    //     if let Some(idx) = self.indices.get_by_left(hash) {
+    //         let children = self
+    //             .relations
+    //             .children(*idx)
+    //             .iter(&self.relations)
+    //             .map(|(_edge, node)| {
+    //                 *self
+    //                     .indices
+    //                     .get_by_right(&node)
+    //                     .expect("Every index must be in the hash-index map")
+    //             })
+    //             .collect::<HashSet<u64>>();
+
+    //         Some(children)
+    //     } else {
+    //         None
+    //     }
+    // }
+
+    /// Get all requirements of an package
+    pub fn get_requirements(&self, hash: &u64) -> Option<impl Iterator<Item = &Requirement>> {
+        if let Some(index) = self.indices.get_by_left(hash) {
+            let requirements =
+                self.relations
+                    .children(*index)
+                    .iter(&self.relations)
+                    .map(|(edge, _node)| {
+                        let req_idx = self
+                            .relations
+                            .edge_weight(edge)
+                            .expect("INTERNAL: Must be present.");
+                        self.requirements
+                            .get(req_idx)
+                            .expect("INTERNAL: Must be present.")
+                    });
+            Some(requirements)
+        } else {
+            None
+        }
+    }
+
+    // pub fn resolve_requirements(&self, requirements: &HashSet<u64>) -> Result<HashSet<u64>> {
+    //     let mut collector = HashSet::new();
+    //     for hash in packages {
+    //         self.inner_resolve_depdendency(hash, &mut collector)?;
+    //     }
+    //     Ok(collector)
+    // }
+
+    pub fn resolve_requirements(
+        &self,
+        requirements: impl Iterator<Item = &Requirement>,
+    ) -> Result<HashSet<u64>> {
+        let mut collector = HashMap::new();
+
+        self.inner_resolve_requirement(requirement, &mut collector)?;
+
+        todo!()
+    }
+
+    fn inner_resolve_requirement(
+        &self,
+        requirement: &Requirement,
+        collector: &mut HashMap<&Requirement, u64>,
+    ) -> Result<()> {
+        for (hash, pkg) in &self.nodes {
+            if pkg.provides.is_superset(requirement.provides())
+                && requirement.version_req().matches(pkg.version)
+            {
+                collector.insert(requirement, hash);
+                self.inner_resolve_requirement(pkg.req, collector)
+            }
+        }
+    }
+
+    // TODO will probably overflow with many dependencies, put depdencies in state ?
+
+    // fn inner_get_depdendencies(
+    //     &self,
+    //     hash: &u64,
+    //     collector: &mut HashSet<Box<dyn Dependency>>,
+    // ) -> Result<()> {
+    //     let idx = self
+    //         .hash_idx_map
+    //         .get_by_left(hash)
+    //         .ok_or(Error::PackageNotFound(*hash))?;
+    //     for (edge, node) in self.relations.children(*idx).iter(&self.relations) {
+    //         let version_req = self
+    //             .relations
+    //             .edge_weight(edge)
+    //             .expect("Edge must be present.");
+    //         let hash = self
+    //             .hash_idx_map
+    //             .get_by_right(&node)
+    //             .expect("Every index must be in the hash-index map");
+    //         let package = self.map.get(hash).expect("Must be present");
+    //         let dependency = package.into_dependency(*version_req, self.get_dependencies(&hash)?);
+    //         collector.insert(dependency);
+    //     }
+    //     Ok(())
+    // }
 }
 
 /// A Store that contains all the packages installed by any user
@@ -54,13 +176,13 @@ impl Store {
     /// Creates a new store directory under the given path.
     /// Will return an Error if the directory already exists
     pub fn create_at_path<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let path = path.as_ref();
+        let path = path.as_ref().to_owned();
         fs::create_dir(&path)?;
 
         let database = PathDatabase::create_at_path(path.join(PACKAGES_DB), Packages::new())?;
 
         Ok(Self {
-            path: path.to_owned(),
+            path,
             database,
             hasher: Crc32Hasher::new(),
         })
@@ -86,25 +208,33 @@ impl Store {
 
     /// Dispatch a task over all the packages stored.
     pub fn read_packages<R, T: FnOnce(&HashMap<u64, Package>) -> R>(&self, task: T) -> Result<R> {
-        let res = self.database.read(|packages| task(&packages.map))?;
+        let res = self.database.read(|packages| task(&packages.nodes))?;
         Ok(res)
     }
 
+    // TODO package should already be hashed in the build step by the recipe
+
     /// Hash package and update package path.
-    fn hash_package(&mut self, package: &Package) -> Result<u64> {
+    fn hash_package(&mut self, package: &Package, path: &Path) -> Result<u64> {
         package.name.hash(&mut self.hasher);
         package.version.hash(&mut self.hasher);
-        extra::hash_path(&package.path, &mut self.hasher)?;
+        extra::hash_path(path, &mut self.hasher)?;
         let hash = self.hasher.finish();
 
         Ok(hash)
     }
 
     /// Updates package path and returns old path.
-    fn update_package_path(&self, package: &mut Package, hash: u64) -> PathBuf {
+    // fn update_package_path(&self, package: &mut Package, hash: u64) -> PathBuf {
+    //     let name_version_hash = format!("{}-{}-{}", &package.name, &package.version, hash);
+    //     let old = std::mem::replace(&mut package.path, PathBuf::from(name_version_hash));
+    //     old
+    // }
+
+    /// Calculates a new path in the store for the package.
+    pub fn get_package_path(&self, package: &Package, hash: &u64) -> PathBuf {
         let name_version_hash = format!("{}-{}-{}", &package.name, &package.version, hash);
-        let old = std::mem::replace(&mut package.path, self.path.join(name_version_hash));
-        old
+        PathBuf::from(name_version_hash)
     }
 
     fn copy_to_store<P: AsRef<Path>, Q: AsRef<Path>>(
@@ -129,42 +259,64 @@ impl Store {
     // TODO maybe do not return Err if package already inserted, but bool or enum
 
     /// Inserts a package into the store and returns its hash.
-    pub fn insert(&mut self, mut package: Package) -> Result<u64> {
-        let hash = self.hash_package(&package)?;
-        let old_path = self.update_package_path(&mut package, hash);
+    pub fn insert<P: AsRef<Path>>(&mut self, package: Package, path: P) -> Result<u64> {
+        let path = path.as_ref();
+        let hash = self.hash_package(&package, path)?;
+        let new_path = self.get_package_path(&package, &hash);
 
         self.database.write(|db| {
-            let res = db.map.insert(hash, package);
+            let idx = db.relations.add_node(package.version.clone());
+
+            let res = db.nodes.insert(hash, package);
             assert!(res.is_none());
 
-            let idx = db.relations.add_node(Weight);
-
-            let res = db.hash_idx_map.insert(hash, idx);
+            let res = db.indices.insert(hash, idx);
             assert!(!res.did_overwrite());
+
+            db.requires.insert(hash, HashSet::new());
         })?;
 
         self.database.read(|db| -> Result<()> {
-            let package = db.map.get(&hash).ok_or(Error::PackageNotFound(hash))?;
-            self.copy_to_store(&old_path, &package.path, hash)?;
+            let package = db.nodes.get(&hash).ok_or(Error::PackageNotFound(hash))?;
+            self.copy_to_store(path, self.path.join(new_path), hash)?;
             Ok(())
         })??;
         Ok(hash)
     }
 
     /// Add a package as a child (dependency) of another package and returns its hash.
-    pub fn add_child(&mut self, parent: &u64, mut package: Package) -> Result<u64> {
-        let hash = self.hash_package(&package)?;
-        let old_path = self.update_package_path(&mut package, hash);
+    pub fn add_child<P: AsRef<Path>>(
+        &mut self,
+        parent: &u64,
+        package: Package,
+        version_req: VersionReq,
+        path: P,
+    ) -> Result<u64> {
+        if !version_req.matches(&package.version) {
+            return Err(Error::VersionMissmatch((package.version, version_req)));
+        }
+
+        let path = path.as_ref();
+        let hash = self.hash_package(&package, path)?;
+        let new_path = self.get_package_path(&package, &hash);
 
         self.database.write(|db| {
-            if let Some(idx) = db.hash_idx_map.get_by_left(parent) {
-                if db.relations.node_weight(*idx).is_some() && db.map.contains_key(parent) {
-                    let res = db.map.insert(hash, package);
+            if let Some(idx) = db.indices.get_by_left(parent) {
+                if db.relations.node_weight(*idx).is_some() && db.nodes.contains_key(parent) {
+                    let (_, child_idx) =
+                        db.relations
+                            .add_child(*idx, version_req.clone(), package.version.clone());
+
+                    let res = db.nodes.insert(hash, package.clone());
                     assert!(res.is_none());
 
-                    let (_, child_idx) = db.relations.add_child(*idx, Weight, Weight);
-                    let res = db.hash_idx_map.insert(hash, child_idx);
+                    let res = db.indices.insert(hash, child_idx);
                     assert!(!res.did_overwrite());
+                    let deps = db
+                        .requires
+                        .get_mut(parent)
+                        .expect("Dependencies must be created on insertion.");
+                    deps.insert(package.into_dependency(version_req, HashSet::new()));
                     Ok(())
                 } else {
                     Err(Error::PackageNotFound(*parent))
@@ -175,27 +327,44 @@ impl Store {
         })??;
 
         self.database.read(|db| -> Result<()> {
-            let package = db.map.get(&hash).ok_or(Error::PackageNotFound(hash))?;
-            self.copy_to_store(&old_path, &package.path, hash)?;
+            let package = db.nodes.get(&hash).ok_or(Error::PackageNotFound(hash))?;
+            self.copy_to_store(path, self.path.join(new_path), hash)?;
             Ok(())
         })??;
         Ok(hash)
     }
 
     /// Add a package as a parent of another package(dependency) and returns its hash.
-    pub fn add_parent(&mut self, child: &u64, mut package: Package) -> Result<u64> {
-        let hash = self.hash_package(&mut package)?;
-        let old_path = self.update_package_path(&mut package, hash);
+    pub fn add_parent<P: AsRef<Path>>(
+        &mut self,
+        child: &u64,
+        package: Package,
+        version_req: VersionReq,
+        path: P,
+    ) -> Result<u64> {
+        if !version_req.matches(&package.version) {
+            return Err(Error::VersionMissmatch((package.version, version_req)));
+        }
+
+        let path = path.as_ref();
+        let hash = self.hash_package(&package, path)?;
+        let new_path = self.get_package_path(&package, &hash);
 
         self.database.write(|db| {
-            if let Some(idx) = db.hash_idx_map.get_by_left(child) {
-                if db.relations.node_weight(*idx).is_some() && db.map.contains_key(child) {
-                    let res = db.map.insert(hash, package);
+            if let Some(idx) = db.indices.get_by_left(child) {
+                if db.relations.node_weight(*idx).is_some() && db.nodes.contains_key(child) {
+                    let (_, parent_idx) =
+                        db.relations
+                            .add_parent(*idx, version_req.clone(), package.version.clone());
+
+                    let res = db.nodes.insert(hash, package.clone());
                     assert!(res.is_none());
 
-                    let (_, parent_idx) = db.relations.add_parent(*idx, Weight, Weight);
-                    let res = db.hash_idx_map.insert(hash, parent_idx);
+                    let res = db.indices.insert(hash, parent_idx);
                     assert!(!res.did_overwrite());
+                    let mut deps = HashSet::new();
+                    deps.insert(package.into_dependency(version_req, HashSet::new()));
+                    db.requires.insert(hash, deps);
                     Ok(())
                 } else {
                     Err(Error::PackageNotFound(*child))
@@ -206,8 +375,8 @@ impl Store {
         })??;
 
         self.database.read(|db| -> Result<()> {
-            let package = db.map.get(&hash).ok_or(Error::PackageNotFound(hash))?;
-            self.copy_to_store(&old_path, &package.path, hash)?;
+            let package = db.nodes.get(&hash).ok_or(Error::PackageNotFound(hash))?;
+            self.copy_to_store(path, self.path.join(new_path), hash)?;
             Ok(())
         })??;
         Ok(hash)
@@ -222,12 +391,12 @@ impl Store {
         hashes: &mut HashSet<u64>,
     ) -> Result<()> {
         self.database.read(|db| -> Result<()> {
-            let package = db.map.get(hash).ok_or(Error::PackageNotFound(*hash))?;
+            let package = db.nodes.get(hash).ok_or(Error::PackageNotFound(*hash))?;
 
-            extra::link_optional_component_paths(&package.optional_component_paths(), to)?;
+            extra::link_components(&self.path, &package.provides, to)?;
 
             let package_idx = db
-                .hash_idx_map
+                .indices
                 .get_by_left(hash)
                 .ok_or(Error::IndexNotFound(*hash))?;
 
@@ -236,7 +405,7 @@ impl Store {
                 .iter(&db.relations)
                 .map(|(_edge, child_idx)| -> Result<()> {
                     let child = db
-                        .hash_idx_map
+                        .indices
                         .get_by_right(&child_idx)
                         .ok_or(Error::HashNotFound(child_idx))?;
                     self.inner_link_package(child, to, hashes)?;
@@ -252,18 +421,14 @@ impl Store {
 
     /// Links the packakge and all its dependencies to the specified path.
     /// Returns a list of all package hashes linked the process.
-    pub fn link_package(&self, hash: &u64, to: &ComponentPaths) -> Result<HashSet<u64>> {
+    fn link_package(&self, hash: &u64, to: &ComponentPaths) -> Result<HashSet<u64>> {
         let mut hashes = HashSet::new();
         self.inner_link_package(hash, to, &mut hashes)?;
         Ok(hashes)
     }
 
     /// Links all the packages and their respective dependencies to the specified path.
-    pub fn link_packages(
-        &self,
-        hashes: &HashSet<u64>,
-        to: &ComponentPaths,
-    ) -> Result<HashSet<u64>> {
+    fn link_packages(&self, hashes: &HashSet<u64>, to: &ComponentPaths) -> Result<HashSet<u64>> {
         let mut res = HashSet::new();
         hashes
             .iter()
@@ -279,11 +444,11 @@ impl Store {
     pub fn remove_unused(&mut self, user_manager: &UserManager) -> Result<HashSet<u64>> {
         let to_remove = self.database.read(|db| {
             let to_remove = db
-                .map
+                .nodes
                 .iter()
                 .filter_map(|(key, package)| {
                     if let Ok(res) = user_manager.contains_package(key) && !res {
-                        Some((*key, package.path.clone()))
+                        Some((*key, self.get_package_path(&package, key)))
                     } else {
                         None
                     }
@@ -295,18 +460,18 @@ impl Store {
         // TODO before deleting all the pathes verify that packages are indeed not used by checking their relations
 
         for (_key, path) in to_remove.iter() {
-            fs::remove_dir_all(path)?;
+            fs::remove_dir_all(self.path.join(path))?;
         }
 
         let to_remove_keys = to_remove.into_keys().collect::<HashSet<u64>>();
 
         self.database.write(|db| {
             for key in to_remove_keys.iter() {
-                let res = db.map.remove(&key);
+                let res = db.nodes.remove(&key);
                 assert!(res.is_some());
 
                 let (_, idx) = db
-                    .hash_idx_map
+                    .indices
                     .remove_by_left(&key)
                     .expect("Every key must be in the hash-index map");
                 let res = db.relations.remove_node(idx);
@@ -320,7 +485,7 @@ impl Store {
     /// Searches the store for the given name and do a specified task on them.
     pub fn search<R, T: Fn(&u64, &Package) -> R>(&self, name: &str, task: T) -> Result<Vec<R>> {
         let res = self.database.read(|db| {
-            db.map
+            db.nodes
                 .iter()
                 .filter_map(|(key, package)| {
                     if package.name.starts_with(name) {
@@ -336,24 +501,8 @@ impl Store {
 
     /// Searches for the children of the specified package
     pub fn get_children(&self, hash: &u64) -> Result<HashSet<u64>> {
-        let children = self.database.read(|db| {
-            let idx = db
-                .hash_idx_map
-                .get_by_left(hash)
-                .ok_or(Error::PackageNotFound(*hash))?;
-            let children = db
-                .relations
-                .children(*idx)
-                .iter(&db.relations)
-                .map(|(_edge, node)| {
-                    *db.hash_idx_map
-                        .get_by_right(&node)
-                        .expect("Every index must be in the hash-index map")
-                })
-                .collect::<HashSet<u64>>();
-            Ok(children)
-        })?;
-        children
+        let children = self.database.read(|db| db.get_children(hash))?;
+        children.ok_or(Error::PackageNotFound(*hash))
     }
 
     // TODO maybe flush just after every io operation
@@ -362,6 +511,11 @@ impl Store {
     pub fn flush(&self) -> Result<()> {
         self.database.save()?;
         Ok(())
+    }
+
+    /// The path of the store
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 }
 
@@ -373,9 +527,11 @@ mod tests {
         path::Path,
     };
 
+    use relative_path::RelativePathBuf;
+    use semver::{Version, VersionReq};
     use temp_dir::TempDir;
 
-    use crate::{extra::ComponentPaths, Package, Store, UserManager};
+    use crate::{components::ComponentPaths, Binary, Component, Package, Store, UserManager};
 
     use super::PACKAGES_DB;
 
@@ -394,8 +550,16 @@ mod tests {
         let package_bin_path = path.join("bin");
         fs::create_dir_all(&package_bin_path).unwrap();
 
-        let _bin = File::create(package_bin_path.join(&format!("{}.sh", name))).unwrap();
-        Package::new(name, "0.1.0", &path)
+        let shell_name = format!("{}.sh", name);
+        let shell_path = package_bin_path.join(&shell_name);
+
+        let _bin = File::create(&shell_path).unwrap();
+        let mut provides = HashSet::new();
+        provides.insert(Component::Binary(Binary::Shell(RelativePathBuf::from(
+            &format!("bin/{}", shell_name),
+        ))));
+
+        Package::new(name, Version::new(1, 0, 0), provides)
     }
 
     #[test]
@@ -444,11 +608,19 @@ mod tests {
         let mut store = store_create_at_path(&path);
         let package = package(&package_path, "package");
 
-        let hash = store.insert(package).unwrap();
+        let hash = store.insert(package, package_path).unwrap();
 
         let children = store.get_children(&hash).unwrap();
-
         assert!(children.is_empty());
+
+        store
+            .read_packages(|pkgs| {
+                let package = pkgs.get(&hash).unwrap();
+                let package_store_path = store.get_package_path(&package, &hash);
+                assert!(package_store_path.exists());
+                assert!(package_store_path.is_dir());
+            })
+            .unwrap();
     }
 
     #[test]
@@ -461,15 +633,31 @@ mod tests {
         let mut store = store_create_at_path(&path);
 
         let parent = package(&parent_path, "parent");
-        let parent_hash = store.insert(parent).unwrap();
+        let parent_hash = store.insert(parent, parent_path).unwrap();
 
         let child = package(&child_path, "child");
-        let child_hash = store.add_child(&parent_hash, child).unwrap();
+        let child_hash = store
+            .add_child(&parent_hash, child, VersionReq::STAR, child_path)
+            .unwrap();
 
         let children = store.get_children(&parent_hash).unwrap();
 
         assert_eq!(children.len(), 1);
-        assert!(children.get(&child_hash).is_some())
+        assert!(children.get(&child_hash).is_some());
+
+        store
+            .read_packages(|pkgs| {
+                let child = pkgs.get(&child_hash).unwrap();
+                let child_store_path = store.get_package_path(&child, &child_hash);
+                assert!(child_store_path.exists());
+                assert!(child_store_path.is_dir());
+
+                let parent = pkgs.get(&parent_hash).unwrap();
+                let parent_store_path = store.get_package_path(&parent, &parent_hash);
+                assert!(parent_store_path.exists());
+                assert!(parent_store_path.is_dir());
+            })
+            .unwrap();
     }
 
     #[test]
@@ -482,15 +670,31 @@ mod tests {
         let mut store = store_create_at_path(&path);
 
         let child = package(&child_path, "child");
-        let child_hash = store.insert(child).unwrap();
+        let child_hash = store.insert(child, child_path).unwrap();
 
         let parent = package(&parent_path, "parent");
-        let parent_hash = store.add_parent(&child_hash, parent).unwrap();
+        let parent_hash = store
+            .add_parent(&child_hash, parent, VersionReq::STAR, parent_path)
+            .unwrap();
 
         let children = store.get_children(&parent_hash).unwrap();
 
         assert_eq!(children.len(), 1);
         assert!(children.get(&child_hash).is_some());
+
+        store
+            .read_packages(|pkgs| {
+                let child = pkgs.get(&child_hash).unwrap();
+                let child_store_path = store.get_package_path(&child, &child_hash);
+                assert!(child_store_path.exists());
+                assert!(child_store_path.is_dir());
+
+                let parent = pkgs.get(&parent_hash).unwrap();
+                let parent_store_path = store.get_package_path(&parent, &parent_hash);
+                assert!(parent_store_path.exists());
+                assert!(parent_store_path.is_dir());
+            })
+            .unwrap();
     }
 
     #[test]
@@ -505,8 +709,8 @@ mod tests {
         let pkg = package(&pkg_path, "package");
         let pkg_two = package(&pkg_two_path, "package2");
 
-        let hash = store.insert(pkg).unwrap();
-        let hash_two = store.insert(pkg_two).unwrap();
+        let hash = store.insert(pkg, pkg_path).unwrap();
+        let hash_two = store.insert(pkg_two, pkg_two_path).unwrap();
 
         let mut user_manager = UserManager::create_at_path(&user_manager_path).unwrap();
         assert!(user_manager.insert_package(&hash, &mut store).unwrap());
@@ -541,10 +745,12 @@ mod tests {
         let mut store = store_create_at_path(&path);
 
         let parent = package(&parent_path, "parent");
-        let parent_hash = store.insert(parent).unwrap();
+        let parent_hash = store.insert(parent, parent_path).unwrap();
 
         let child = package(&child_path, "child");
-        let child_hash = store.add_child(&parent_hash, child).unwrap();
+        let child_hash = store
+            .add_child(&parent_hash, child, VersionReq::STAR, child_path)
+            .unwrap();
 
         let global_temp_path = temp_dir.child("global");
         fs::create_dir(&global_temp_path).unwrap();

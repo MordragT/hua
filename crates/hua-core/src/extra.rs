@@ -1,14 +1,35 @@
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 
-use crate::error::*;
+use crate::{error::*, Component, ComponentPaths, Components, OptionalComponentPaths};
 use std::{
+    cmp::Ordering,
     collections::HashSet,
-    fs,
+    fmt, fs,
     hash::{Hash, Hasher},
-    io,
     os::unix,
     path::{Path, PathBuf},
 };
+
+pub struct Remote<T> {
+    pub data: T,
+    pub source: Url,
+}
+
+impl<T> Remote<T> {
+    pub fn new(data: T, source: Url) -> Self {
+        Self { data, source }
+    }
+}
+
+#[derive(Debug)]
+pub enum Source {
+    Local { path: PathBuf, checksum: u64 },
+    Http { url: Url, checksum: u64 },
+}
+
+pub const LINUX: u8 = 0x01;
+pub const X86_64: u8 = 0x01;
 
 // TODO: better naming
 // TODO io_operations should be able to return something (like when linking the linked paths)
@@ -165,6 +186,82 @@ pub fn link_component_paths(
     Ok(collector)
 }
 
+/// Links components to component paths.
+/// Creates the directories of the destination if they do not exist
+/// Returns a list of all links created
+pub fn link_components<P: AsRef<Path>>(
+    base: P,
+    from: &HashSet<Component>,
+    to: &ComponentPaths,
+) -> Result<HashSet<PathBuf>> {
+    let base = base.as_ref();
+
+    to.create_dirs()?;
+    let mut collector = HashSet::new();
+
+    for component in from {
+        inner_io_task_to(
+            &component.relative_path().to_path(base),
+            &to.binary,
+            &symlink,
+            &fold_hash_set_path_buf,
+            &mut collector,
+        )?;
+    }
+
+    Ok(collector)
+}
+
+// pub fn link_components<P: AsRef<Path>>(
+//     base: P,
+//     from: &Components,
+//     to: &ComponentPaths,
+// ) -> Result<HashSet<PathBuf>> {
+//     let base = base.as_ref();
+
+//     to.create_dirs()?;
+//     let mut collector = HashSet::new();
+
+//     for p in from.binaries() {
+//         inner_io_task_to(
+//             &p.relative_path().to_path(base),
+//             &to.binary,
+//             &symlink,
+//             &fold_hash_set_path_buf,
+//             &mut collector,
+//         )?;
+//     }
+//     for p in from.configs() {
+//         inner_io_task_to(
+//             &p.to_path(base),
+//             &to.binary,
+//             &symlink,
+//             &fold_hash_set_path_buf,
+//             &mut collector,
+//         )?;
+//     }
+//     for p in from.libraries() {
+//         inner_io_task_to(
+//             &p.to_path(base),
+//             &to.binary,
+//             &symlink,
+//             &fold_hash_set_path_buf,
+//             &mut collector,
+//         )?;
+//     }
+//     for p in from.shares() {
+//         inner_io_task_to(
+//             &p.to_path(base),
+//             &to.binary,
+//             &symlink,
+//             &fold_hash_set_path_buf,
+//             &mut collector,
+//         )?;
+//     }
+
+//     Ok(collector)
+// }
+
 /// Links optional component paths to normal component paths
 /// Creates the directories of the destination if they do not exist
 /// Returns a list of all links created
@@ -234,6 +331,8 @@ pub fn copy_to<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<u64> {
     io_task_to(from, to, &copy, &fold_u64)
 }
 
+// TODO use File and Reader to hash contents not read_dir
+
 /// Calculates a hash with all the files under the given path
 pub fn hash_path<P: AsRef<Path>, H: Hasher>(path: P, state: &mut H) -> Result<()> {
     let path = path.as_ref();
@@ -246,103 +345,6 @@ pub fn hash_path<P: AsRef<Path>, H: Hasher>(path: P, state: &mut H) -> Result<()
             .collect::<Result<()>>()
     } else {
         fs::read(path)?.hash(state);
-        Ok(())
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct ComponentPaths {
-    pub binary: PathBuf,
-    pub config: PathBuf,
-    pub library: PathBuf,
-    pub share: PathBuf,
-}
-
-impl ComponentPaths {
-    pub fn from_path<P: AsRef<Path>>(path: P) -> Self {
-        let path = path.as_ref();
-        Self {
-            binary: path.join("bin"),
-            config: path.join("cfg"),
-            library: path.join("lib"),
-            share: path.join("share"),
-        }
-    }
-
-    pub fn new<T, U, V, W>(binary: T, config: U, library: V, share: W) -> Self
-    where
-        T: AsRef<Path>,
-        U: AsRef<Path>,
-        V: AsRef<Path>,
-        W: AsRef<Path>,
-    {
-        Self {
-            binary: binary.as_ref().to_owned(),
-            config: config.as_ref().to_owned(),
-            library: library.as_ref().to_owned(),
-            share: share.as_ref().to_owned(),
-        }
-    }
-
-    pub fn create_dirs(&self) -> io::Result<()> {
-        if !self.binary.exists() {
-            fs::create_dir(&self.binary)?;
-        }
-        if !self.config.exists() {
-            fs::create_dir(&self.config)?;
-        }
-        if !self.library.exists() {
-            fs::create_dir(&self.library)?;
-        }
-        if !self.share.exists() {
-            fs::create_dir(&self.share)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct OptionalComponentPaths {
-    pub binary: Option<PathBuf>,
-    pub config: Option<PathBuf>,
-    pub library: Option<PathBuf>,
-    pub share: Option<PathBuf>,
-}
-
-impl OptionalComponentPaths {
-    pub fn new<T, U, V, W>(
-        binary: Option<T>,
-        config: Option<U>,
-        library: Option<V>,
-        share: Option<W>,
-    ) -> Self
-    where
-        T: AsRef<Path>,
-        U: AsRef<Path>,
-        V: AsRef<Path>,
-        W: AsRef<Path>,
-    {
-        Self {
-            binary: binary.map(|p| p.as_ref().to_owned()),
-            config: config.map(|p| p.as_ref().to_owned()),
-            library: library.map(|p| p.as_ref().to_owned()),
-            share: share.map(|p| p.as_ref().to_owned()),
-        }
-    }
-
-    pub fn create_dirs(&self) -> io::Result<()> {
-        if let Some(p) = &self.binary && !p.exists() {
-            fs::create_dir(&p)?;
-        }
-        if let Some(p) = &self.config && !p.exists() {
-            fs::create_dir(&p)?;
-        }
-        if let Some(p) = &self.library && !p.exists() {
-            fs::create_dir(&p)?;
-        }
-        if let Some(p) = &self.share && !p.exists() {
-            fs::create_dir(&p)?;
-        }
         Ok(())
     }
 }

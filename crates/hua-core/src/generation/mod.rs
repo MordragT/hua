@@ -1,8 +1,8 @@
 pub use manager::GenerationManager;
 use serde::{Deserialize, Serialize};
 
-use crate::error::*;
-use crate::{extra::ComponentPaths, Store};
+use crate::{components::ComponentPaths, Store};
+use crate::{error::*, Requirement};
 use std::collections::HashSet;
 use std::{
     fmt, fs,
@@ -16,6 +16,7 @@ pub struct Generation {
     path: PathBuf,
     packages: HashSet<u64>,
     component_paths: ComponentPaths,
+    //requires: HashSet<Box<dyn Dependency>>,
 }
 
 impl fmt::Display for Generation {
@@ -47,29 +48,61 @@ impl Generation {
             path,
             packages: HashSet::new(),
             component_paths,
+            //requires: HashSet::new(),
         })
     }
 
+    pub fn resolve_dependencies(
+        &self,
+        dependencies: &HashSet<Requirement>,
+        store: &mut Store,
+    ) -> Result<HashSet<u64>> {
+        todo!()
+    }
+
+    /// Checks if the given dependency conflicts with any other already installed
+    /// and returns a list of dependencies currently not installed.
+    pub fn resolve_dependency(
+        &self,
+        requirement: &Requirement,
+        store: &mut Store,
+    ) -> Result<HashSet<u64>> {
+        for key in &self.packages {
+            store.read_packages(|map| {
+                let package = map
+                    .get(&key)
+                    .expect("Every package in the generation must be in the store.");
+                if !package.provides.is_disjoint(requirement.components()) {
+                    Err(Error::DependencyProvideCollision(requirement.clone()))
+                } else {
+                    Ok(())
+                }
+            })??;
+        }
+
+        todo!()
+    }
+
     pub fn link_package(&mut self, hash: &u64, store: &mut Store) -> Result<()> {
-        let mut hashes = store.link_package(hash, &self.component_paths)?;
-        let packages = self
-            .packages
-            .union(&mut hashes)
-            .map(|hash| *hash)
-            .collect::<HashSet<u64>>();
-        self.packages = packages;
+        // let mut hashes = store.link_package(hash, &self.component_paths)?;
+        // let packages = self
+        //     .packages
+        //     .union(&mut hashes)
+        //     .map(|hash| *hash)
+        //     .collect::<HashSet<u64>>();
+        // self.packages = packages;
 
         Ok(())
     }
 
     pub fn link_packages(&mut self, hashes: &HashSet<u64>, store: &mut Store) -> Result<()> {
-        let mut hashes = store.link_packages(hashes, &self.component_paths)?;
-        let packages = self
-            .packages
-            .union(&mut hashes)
-            .map(|hash| *hash)
-            .collect::<HashSet<u64>>();
-        self.packages = packages;
+        // let mut hashes = store.link_packages(hashes, &self.component_paths)?;
+        // let packages = self
+        //     .packages
+        //     .union(&mut hashes)
+        //     .map(|hash| *hash)
+        //     .collect::<HashSet<u64>>();
+        // self.packages = packages;
 
         Ok(())
     }

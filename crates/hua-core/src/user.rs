@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::generation::GenerationManager;
 use crate::persist::Pot;
-use crate::{error::*, extra::ComponentPaths, Store};
+use crate::{components::ComponentPaths, error::*, Store};
 
 /// The filename of the users database
 pub const USERS_DB: &str = "users.db";
@@ -183,12 +183,15 @@ impl UserManager {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
     use std::fs::{self, File};
 
+    use relative_path::RelativePathBuf;
+    use semver::Version;
     use temp_dir::TempDir;
 
-    use crate::extra::ComponentPaths;
-    use crate::{Package, Store};
+    use crate::components::ComponentPaths;
+    use crate::{Binary, Component, Package, Store};
 
     use super::{User, UserManager};
 
@@ -197,18 +200,26 @@ mod tests {
     fn user_manager_insert_package(temp_dir: &TempDir) -> (UserManager, Store, u64) {
         let path = temp_dir.child("user");
         let store_path = temp_dir.child("store");
+        let package_path = temp_dir.child("package");
 
         let package = {
-            let package_path = temp_dir.child("package");
             let package_bin_path = package_path.join("bin");
             fs::create_dir_all(&package_bin_path).unwrap();
 
-            let _bin = File::create(package_bin_path.join("package.sh")).unwrap();
-            Package::new("package", "0.1.0", &package_path)
+            let shell_path = package_bin_path.join("package.sh");
+
+            let _bin = File::create(&shell_path).unwrap();
+            let mut provides = HashSet::new();
+
+            provides.insert(Component::Binary(Binary::Shell(RelativePathBuf::from(
+                "bin/package.sh",
+            ))));
+
+            Package::new("package", Version::new(1, 0, 0), provides)
         };
 
         let mut store = Store::create_at_path(&store_path).unwrap();
-        let hash = store.insert(package).unwrap();
+        let hash = store.insert(package, package_path).unwrap();
 
         let mut user_manager = UserManager::create_at_path(&path).unwrap();
         assert!(user_manager.insert_package(&hash, &mut store).unwrap());

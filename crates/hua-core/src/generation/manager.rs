@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::{components::ComponentPaths, Store};
 use crate::{error::*, extra, Generation};
-use crate::{extra::ComponentPaths, Store};
 use std::collections::{HashMap, HashSet};
 use std::{
     fs,
@@ -154,6 +154,7 @@ impl GenerationManager {
             .expect("The current generation should always be present in the manager")
     }
 
+    #[allow(dead_code)]
     fn get_current_mut(&mut self) -> &mut Generation {
         self.list
             .get_mut(&self.current)

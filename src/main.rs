@@ -1,7 +1,7 @@
 use std::{error::Error, fs};
 
 use clap::{arg, Command};
-use hua_core::{extra::ComponentPaths, Package, Store, UserManager};
+use hua_core::{ComponentPaths, Package, Store, UserManager, Version};
 
 const HUA_PATH: &str = "hua";
 const STORE_PATH: &str = "hua/store";
@@ -41,7 +41,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             Command::new("remove")
                 .about("Creates a new generation without the specified package and switches to the generation")
                 .arg_required_else_help(true)
-                .arg(arg!(<NAME> "The name of package"))
+                .arg(arg!(<NAME> "The name of package")),
+            Command::new("shell")
+                .about("Create a new shell with the specified packages in scope")
+                .arg_required_else_help(true)
+                .arg(arg!(<NAME> ... "The names of the packages to include in scope"))
         ]).get_matches();
 
     match matches.subcommand() {
@@ -91,6 +95,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             _ => unreachable!(),
         },
         Some(("add", sub_matches)) => {
+            // TODO should give a selection of packages found in the local store or remote caches and let the user decide
+
             let name = sub_matches
                 .value_of("NAME")
                 .expect("When adding a package, a name has to be given.");
@@ -101,19 +107,21 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .value_of("PATH")
                 .expect("When adding a package, a path has to be provided.");
 
-            let mut store = Store::open(STORE_PATH)?;
-            let mut user_manager = UserManager::open(USER_MANAGER_PATH)?;
+            // let mut store = Store::open(STORE_PATH)?;
+            // let mut user_manager = UserManager::open(USER_MANAGER_PATH)?;
 
-            let package = Package::new(name, version, path);
+            // let package = Package::new(name, Version::parse(version)?, path);
 
-            let hash = store.insert(package)?;
-            user_manager.insert_package(&hash, &mut store)?;
+            // let hash = store.insert(package)?;
+            // user_manager.insert_package(&hash, &mut store)?;
 
-            let global_paths = ComponentPaths::from_path(GLOBAL_PATH);
-            user_manager.switch_global_links(&global_paths)?;
+            // let global_paths = ComponentPaths::from_path(GLOBAL_PATH);
+            // user_manager.switch_global_links(&global_paths)?;
 
-            store.flush()?;
-            user_manager.flush()?;
+            // store.flush()?;
+            // user_manager.flush()?;
+
+            todo!()
         }
         Some(("remove", sub_matches)) => {
             let name = sub_matches
@@ -135,6 +143,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             store.flush()?;
             user_manager.flush()?;
         }
+        Some(("shell", _sub_matches)) => todo!(),
         _ => unreachable!(),
     }
 
