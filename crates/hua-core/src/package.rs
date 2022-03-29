@@ -1,8 +1,9 @@
 use semver::{Version, VersionReq};
 
+use crate::dependency::{Conflict, Conflicts};
 use crate::{components::OptionalComponentPaths, error::*};
 use crate::{Component, Requirement, Store};
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::fmt;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
@@ -39,22 +40,22 @@ use std::path::{Path, PathBuf};
 //     }
 // }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, Hash)]
 pub struct Package {
     pub name: String,
     pub version: Version,
-    pub provides: HashSet<Component>,
+    pub provides: BTreeSet<Component>,
 }
 
-impl Hash for Package {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-        self.version.hash(state);
-        for component in &self.provides {
-            component.hash(state);
-        }
-    }
-}
+// impl Hash for Package {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         self.name.hash(state);
+//         self.version.hash(state);
+//         for component in &self.provides {
+//             component.hash(state);
+//         }
+//     }
+// }
 
 // impl PackageMetadata for Package {
 //     fn name(&self) -> &String {
@@ -76,7 +77,7 @@ impl Hash for Package {
 
 impl Package {
     /// Creates a new package
-    pub fn new(name: &str, version: Version, provides: HashSet<Component>) -> Self {
+    pub fn new(name: &str, version: Version, provides: BTreeSet<Component>) -> Self {
         Self {
             name: name.to_owned(),
             version,
@@ -85,60 +86,19 @@ impl Package {
     }
 
     /// Creates a dependency from a package
-    pub fn into_requirement(
-        self,
-        version_req: VersionReq,
-        requires: HashSet<Requirement>,
-    ) -> Requirement {
+    pub fn into_requirement(self, version_req: VersionReq) -> Requirement {
         Requirement::new(self.name, version_req, self.provides)
     }
+}
 
-    // pub fn name_version_hash(&self) -> Result<String> {
-    //     let path_str = self.path.to_str().ok_or(Error::OsStringConversion)?;
-    //     Ok(format!("{}-{}-{}", self.name, self.version, path_str))
-    // }
-
-    // TODO use HashSet<Component> instead and link them
-
-    // pub fn optional_component_paths(&self) -> OptionalComponentPaths {
-    //     OptionalComponentPaths::new(self.binary(), self.config(), self.library(), self.share())
-    // }
-
-    // pub fn binary(&self) -> Option<PathBuf> {
-    //     let binary = self.path.join("bin");
-    //     if binary.exists() {
-    //         Some(binary)
-    //     } else {
-    //         None
-    //     }
-    // }
-
-    // pub fn config(&self) -> Option<PathBuf> {
-    //     let config = self.path.join("cfg");
-    //     if config.exists() {
-    //         Some(config)
-    //     } else {
-    //         None
-    //     }
-    // }
-
-    // pub fn library(&self) -> Option<PathBuf> {
-    //     let library = self.path.join("lib");
-    //     if library.exists() {
-    //         Some(library)
-    //     } else {
-    //         None
-    //     }
-    // }
-
-    // pub fn share(&self) -> Option<PathBuf> {
-    //     let share = self.path.join("share");
-    //     if share.exists() {
-    //         Some(share)
-    //     } else {
-    //         None
-    //     }
-    // }
+impl Conflicts for Package {
+    fn conflicts<'a>(&'a self) -> &dyn Iterator<Item = Conflict<'a>> {
+        &self
+            .provides
+            .iter()
+            .map(|c| Conflict::Component(c))
+            .chain(std::iter::once(Conflict::Name(&self.name)))
+    }
 }
 
 impl fmt::Display for Package {

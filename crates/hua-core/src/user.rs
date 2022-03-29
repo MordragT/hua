@@ -183,7 +183,7 @@ impl UserManager {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::collections::{BTreeSet, HashSet};
     use std::fs::{self, File};
 
     use relative_path::RelativePathBuf;
@@ -209,7 +209,7 @@ mod tests {
             let shell_path = package_bin_path.join("package.sh");
 
             let _bin = File::create(&shell_path).unwrap();
-            let mut provides = HashSet::new();
+            let mut provides = BTreeSet::new();
 
             provides.insert(Component::Binary(Binary::Shell(RelativePathBuf::from(
                 "bin/package.sh",

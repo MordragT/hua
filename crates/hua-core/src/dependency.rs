@@ -1,4 +1,9 @@
-use std::{collections::HashSet, fmt, fmt::Debug, hash::Hash};
+use std::{
+    collections::{BTreeSet, HashSet},
+    fmt,
+    fmt::Debug,
+    hash::Hash,
+};
 
 use semver::VersionReq;
 use serde::{Deserialize, Serialize};
@@ -14,11 +19,21 @@ use crate::Component;
 //     fn provides(&self) -> &HashSet<Component>;
 // }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub trait Conflicts {
+    fn conflicts<'a>(&'a self) -> &dyn Iterator<Item = Conflict<'a>>;
+}
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum Conflict<'a> {
+    Name(&'a String),
+    Component(&'a Component),
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
 pub struct Requirement {
     name: String,
     version_req: VersionReq,
-    components: HashSet<Component>,
+    components: BTreeSet<Component>,
     // requires: HashSet<Requirement>,
     // provides: HashSet<Component>,
 }
@@ -28,7 +43,7 @@ impl Requirement {
         name: String,
         version_req: VersionReq,
         // requires: HashSet<Requirement>,
-        components: HashSet<Component>,
+        components: BTreeSet<Component>,
     ) -> Self {
         Self {
             name,
@@ -45,7 +60,7 @@ impl Requirement {
     pub fn version_req(&self) -> &VersionReq {
         &self.version_req
     }
-    pub fn components(&self) -> &HashSet<Component> {
+    pub fn components(&self) -> &BTreeSet<Component> {
         &self.components
     }
 
@@ -54,6 +69,22 @@ impl Requirement {
     // }
     // pub fn provides(&self) -> &HashSet<Component> {
     //     &self.provides
+    // }
+}
+
+impl Conflicts for Requirement {
+    fn conflicts<'a>(&'a self) -> &dyn Iterator<Item = Conflict<'a>> {
+        &self
+            .components
+            .iter()
+            .map(|c| Conflict::Component(c))
+            .chain(std::iter::once(Conflict::Name(&self.name)))
+    }
+    // fn conflicts<'a, I>(&'a self) -> I
+    // where
+    //     I: Iterator<Item = Conflict<'a>>,
+    // {
+
     // }
 }
 
@@ -66,19 +97,19 @@ impl fmt::Display for Requirement {
     }
 }
 
-impl Hash for Requirement {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        state.write(self.name.as_bytes());
-        self.version_req.hash(state);
+// impl Hash for Requirement {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         state.write(self.name.as_bytes());
+//         self.version_req.hash(state);
 
-        for component in &self.components {
-            component.hash(state);
-        }
-        // for dependency in &self.requires {
-        //     dependency.hash(state);
-        // }
-    }
-}
+//         for component in &self.components {
+//             component.hash(state);
+//         }
+//         // for dependency in &self.requires {
+//         //     dependency.hash(state);
+//         // }
+//     }
+// }
 
 // impl Eq for dyn Requirement {}
 

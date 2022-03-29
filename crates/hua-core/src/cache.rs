@@ -94,22 +94,23 @@ impl CacheClient {
     pub fn get(&self, hash: &u64) -> Result<Option<Remote<Package>>> {
         // TODO use async for concurrent download of metadata
 
-        self.read_sources(|vec| -> Result<Option<Remote<Package>>> {
-            for source in vec {
-                let mut packages_db = source.to_owned();
-                packages_db.push_str("packages.db");
+        // self.read_sources(|vec| -> Result<Option<Remote<Package>>> {
+        //     for source in vec {
+        //         let mut packages_db = source.to_owned();
+        //         packages_db.push_str("packages.db");
 
-                let response = self.client.get(packages_db).send()?;
-                let bytes = response.bytes()?;
-                let mut packages: Packages = pot::from_slice(bytes.as_slice())?;
-                if let Some(package) = packages.remove(hash) {
-                    let url = Url::parse(&source)?;
-                    return Ok(Some(Remote::new(package, url)));
-                }
-            }
+        //         let response = self.client.get(packages_db).send()?;
+        //         let bytes = response.bytes()?;
+        //         let mut packages: Packages = pot::from_slice(bytes.as_slice())?;
+        //         if let Some(package) = packages.remove(hash) {
+        //             let url = Url::parse(&source)?;
+        //             return Ok(Some(Remote::new(package, url)));
+        //         }
+        //     }
 
-            Ok(None)
-        })?
+        //     Ok(None)
+        // })?
+        todo!()
     }
 
     /// Searches for all matching packages from the different sources.

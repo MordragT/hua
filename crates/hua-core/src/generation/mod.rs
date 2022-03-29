@@ -67,18 +67,18 @@ impl Generation {
         requirement: &Requirement,
         store: &mut Store,
     ) -> Result<HashSet<u64>> {
-        for key in &self.packages {
-            store.read_packages(|map| {
-                let package = map
-                    .get(&key)
-                    .expect("Every package in the generation must be in the store.");
-                if !package.provides.is_disjoint(requirement.components()) {
-                    Err(Error::DependencyProvideCollision(requirement.clone()))
-                } else {
-                    Ok(())
-                }
-            })??;
-        }
+        // for key in &self.packages {
+        //     store.read_packages(|map| {
+        //         let package = map
+        //             .get(&key)
+        //             .expect("Every package in the generation must be in the store.");
+        //         if !package.provides.is_disjoint(requirement.components()) {
+        //             Err(Error::DependencyProvideCollision(requirement.clone()))
+        //         } else {
+        //             Ok(())
+        //         }
+        //     })??;
+        // }
 
         todo!()
     }

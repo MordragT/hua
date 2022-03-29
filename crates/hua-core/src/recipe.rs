@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     hash::Hash,
     path::{Path, PathBuf},
     process::Command,
@@ -22,9 +22,9 @@ pub struct Recipe {
     platforms: u8,
     sources: Vec<Source>,
     license: Vec<String>,
-    requires: HashSet<Requirement>,
+    requires: BTreeSet<Requirement>,
     requires_build: HashSet<Requirement>,
-    provides: HashSet<Component>,
+    provides: BTreeSet<Component>,
     output: Vec<PathBuf>,
     build_binaries: Option<HashMap<String, Command>>,
 }
@@ -33,13 +33,8 @@ impl Hash for Recipe {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         state.write(self.name.as_bytes());
         //state.write(self.version.as_bytes());
-
-        for component in &self.provides {
-            component.hash(state);
-        }
-        for dependency in &self.requires {
-            dependency.hash(state);
-        }
+        self.provides.hash(state);
+        self.requires.hash(state);
     }
 }
 
@@ -77,9 +72,9 @@ impl Recipe {
         platforms: u8,
         sources: Vec<Source>,
         license: Vec<String>,
-        requires: HashSet<Requirement>,
+        requires: BTreeSet<Requirement>,
         requires_build: HashSet<Requirement>,
-        provides: HashSet<Component>,
+        provides: BTreeSet<Component>,
     ) -> Self {
         Self {
             name,

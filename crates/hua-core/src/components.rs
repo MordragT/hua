@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{error::Result, Error};
 
-#[derive(PartialEq, Eq, Debug, Hash, Serialize, Deserialize, Clone)]
+#[derive(PartialEq, Eq, Debug, Hash, Serialize, Deserialize, Clone, PartialOrd, Ord)]
 pub enum Binary {
     Shell(RelativePathBuf),
     Elf(RelativePathBuf),
@@ -38,7 +38,7 @@ impl Into<RelativePathBuf> for Binary {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash, PartialOrd, Ord)]
 pub enum Component {
     Binary(Binary),
     Config(RelativePathBuf),

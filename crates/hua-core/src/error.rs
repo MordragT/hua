@@ -10,6 +10,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub enum Error {
+    RequirementNameCollision(String),
     GenerationIsInUse,
     GenerationNotFound(usize),
     GenerationAlreadyPresent(usize),
@@ -38,6 +39,10 @@ impl std::error::Error for Error {}
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::RequirementNameCollision(s) => f.write_str(&format!(
+                "Requirements could not be resolved due to colliding name: {}",
+                s
+            )),
             Self::WrongPathParent(p) => f.write_str(&format!(
                 "The following relative path had a wrong parent dir: {}",
                 p

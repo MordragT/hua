@@ -1,6 +1,6 @@
 use crate::{
-    components::ComponentPaths, error::*, extra, package::Package, persist::Pot, Requirement,
-    UserManager,
+    components::ComponentPaths, dependency::Conflicts, error::*, extra, package::Package,
+    persist::Pot, Component, Requirement, UserManager,
 };
 use bimap::BiMap;
 use crc32fast::Hasher as Crc32Hasher;
@@ -11,7 +11,7 @@ use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fs::{self},
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
@@ -20,145 +20,313 @@ use std::{
 /// The filename of the packages database of the store
 pub const PACKAGES_DB: &str = "packages.db";
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Packages {
-    nodes: HashMap<u64, Package>,
-    relations: Dag<Version, u64, usize>,
-    indices: BiMap<u64, NodeIndex<usize>>,
-    requirements: HashMap<u64, Requirement>,
-}
+// #[derive(Serialize, Deserialize, Debug, Clone)]
+// pub struct Packages {
+//     nodes: HashMap<u64, Package>,
+//     relations: Dag<Version, Requirement, usize>,
+//     indices: BiMap<u64, NodeIndex<usize>>,
+//     provided_by: HashMap<Requirement, HashSet<u64>>,
+// }
 
-impl Packages {
-    pub fn new() -> Self {
-        Self {
-            nodes: HashMap::new(),
-            relations: Dag::new(),
-            indices: BiMap::new(),
-            requirements: HashMap::new(),
-        }
-    }
+// impl Packages {
+//     pub fn new() -> Self {
+//         Self {
+//             nodes: HashMap::new(),
+//             relations: Dag::new(),
+//             indices: BiMap::new(),
+//             provided_by: HashMap::new(),
+//         }
+//     }
 
-    pub fn search(&self, name: &str) -> Option<&Package> {
-        self.nodes.iter().find_map(|(_, package)| {
-            if package.name.starts_with(name) {
-                Some(package)
-            } else {
-                None
-            }
-        })
-    }
+//     pub fn search(&self, name: &str) -> Option<&Package> {
+//         self.nodes.iter().find_map(|(_, package)| {
+//             if package.name.starts_with(name) {
+//                 Some(package)
+//             } else {
+//                 None
+//             }
+//         })
+//     }
 
-    // pub fn remove(&mut self, hash: &u64) -> Option<Package> {
-    //     self.nodes.remove(hash)
-    // }
+//     // pub fn remove(&mut self, hash: &u64) -> Option<Package> {
+//     //     self.nodes.remove(hash)
+//     // }
 
-    pub fn get(&self, hash: &u64) -> Option<&Package> {
-        self.nodes.get(hash)
-    }
+//     pub fn get(&self, hash: &u64) -> Option<&Package> {
+//         self.nodes.get(hash)
+//     }
 
-    // pub fn get_children(&self, hash: &u64) -> Option<HashSet<u64>> {
-    //     if let Some(idx) = self.indices.get_by_left(hash) {
-    //         let children = self
-    //             .relations
-    //             .children(*idx)
-    //             .iter(&self.relations)
-    //             .map(|(_edge, node)| {
-    //                 *self
-    //                     .indices
-    //                     .get_by_right(&node)
-    //                     .expect("Every index must be in the hash-index map")
-    //             })
-    //             .collect::<HashSet<u64>>();
+//     // pub fn get_children(&self, hash: &u64) -> Option<HashSet<u64>> {
+//     //     if let Some(idx) = self.indices.get_by_left(hash) {
+//     //         let children = self
+//     //             .relations
+//     //             .children(*idx)
+//     //             .iter(&self.relations)
+//     //             .map(|(_edge, node)| {
+//     //                 *self
+//     //                     .indices
+//     //                     .get_by_right(&node)
+//     //                     .expect("Every index must be in the hash-index map")
+//     //             })
+//     //             .collect::<HashSet<u64>>();
 
-    //         Some(children)
-    //     } else {
-    //         None
-    //     }
-    // }
+//     //         Some(children)
+//     //     } else {
+//     //         None
+//     //     }
+//     // }
 
-    /// Get all requirements of an package
-    pub fn get_requirements(&self, hash: &u64) -> Option<impl Iterator<Item = &Requirement>> {
-        if let Some(index) = self.indices.get_by_left(hash) {
-            let requirements =
-                self.relations
-                    .children(*index)
-                    .iter(&self.relations)
-                    .map(|(edge, _node)| {
-                        let req_idx = self
-                            .relations
-                            .edge_weight(edge)
-                            .expect("INTERNAL: Must be present.");
-                        self.requirements
-                            .get(req_idx)
-                            .expect("INTERNAL: Must be present.")
-                    });
-            Some(requirements)
-        } else {
-            None
-        }
-    }
+//     /// Get all requirements of an package
+//     pub fn get_requirements(&self, hash: &u64) -> Option<impl Iterator<Item = &Requirement>> {
+//         if let Some(index) = self.indices.get_by_left(hash) {
+//             let requirements =
+//                 self.relations
+//                     .children(*index)
+//                     .iter(&self.relations)
+//                     .map(|(edge, _node)| {
+//                         self.relations
+//                             .edge_weight(edge)
+//                             .expect("INTERNAL: Must be present.")
+//                     });
+//             Some(requirements)
+//         } else {
+//             None
+//         }
+//     }
 
-    // pub fn resolve_requirements(&self, requirements: &HashSet<u64>) -> Result<HashSet<u64>> {
-    //     let mut collector = HashSet::new();
-    //     for hash in packages {
-    //         self.inner_resolve_depdendency(hash, &mut collector)?;
-    //     }
-    //     Ok(collector)
-    // }
+//     // pub fn resolve_requirements(&self, requirements: &HashSet<u64>) -> Result<HashSet<u64>> {
+//     //     let mut collector = HashSet::new();
+//     //     for hash in packages {
+//     //         self.inner_resolve_depdendency(hash, &mut collector)?;
+//     //     }
+//     //     Ok(collector)
+//     // }
 
-    pub fn resolve_requirements(
-        &self,
-        requirements: impl Iterator<Item = &Requirement>,
-    ) -> Result<HashSet<u64>> {
-        let mut collector = HashMap::new();
+//     // If same requirements but different dependency in store -> use more recent version of dependency
+//     // If two or more requirements have conflicting names or conflicting components -> check if one dependency can resolve all of them
 
-        self.inner_resolve_requirement(requirement, &mut collector)?;
+//     pub fn resolve_requirements(
+//         &self,
+//         packages: impl Iterator<Item = u64>,
+//     ) -> Result<HashSet<u64>> {
+//         // Does graph.children traverse all children to the leaf or just the direct children ?
 
-        todo!()
-    }
+//         struct ConflictMap {}
 
-    fn inner_resolve_requirement(
-        &self,
-        requirement: &Requirement,
-        collector: &mut HashMap<&Requirement, u64>,
-    ) -> Result<()> {
-        for (hash, pkg) in &self.nodes {
-            if pkg.provides.is_superset(requirement.provides())
-                && requirement.version_req().matches(pkg.version)
-            {
-                collector.insert(requirement, hash);
-                self.inner_resolve_requirement(pkg.req, collector)
-            }
-        }
-    }
+//         #[derive(Debug)]
+//         struct Dependencies<'a> {
+//             options: HashMap<&'a Requirement, HashSet<u64>>,
+//             names: HashMap<&'a String, &'a Requirement>,
+//             components: HashMap<&'a Component, &'a Requirement>,
+//             conflicts: HashMap<&'a Requirement, HashMap<Conflict<'a>, &'a Requirement>>,
+//         }
 
-    // TODO will probably overflow with many dependencies, put depdencies in state ?
+//         impl<'a> Dependencies<'a> {
+//             pub fn new() -> Self {
+//                 Self {
+//                     options: HashMap::new(),
+//                     names: HashMap::new(),
+//                     components: HashMap::new(),
+//                     conflicts: HashMap::new(),
+//                 }
+//             }
 
-    // fn inner_get_depdendencies(
-    //     &self,
-    //     hash: &u64,
-    //     collector: &mut HashSet<Box<dyn Dependency>>,
-    // ) -> Result<()> {
-    //     let idx = self
-    //         .hash_idx_map
-    //         .get_by_left(hash)
-    //         .ok_or(Error::PackageNotFound(*hash))?;
-    //     for (edge, node) in self.relations.children(*idx).iter(&self.relations) {
-    //         let version_req = self
-    //             .relations
-    //             .edge_weight(edge)
-    //             .expect("Edge must be present.");
-    //         let hash = self
-    //             .hash_idx_map
-    //             .get_by_right(&node)
-    //             .expect("Every index must be in the hash-index map");
-    //         let package = self.map.get(hash).expect("Must be present");
-    //         let dependency = package.into_dependency(*version_req, self.get_dependencies(&hash)?);
-    //         collector.insert(dependency);
-    //     }
-    //     Ok(())
-    // }
-}
+//             pub fn add_conflict(
+//                 &mut self,
+//                 conflict: Conflict<'a>,
+//                 req: &'a Requirement,
+//                 other: &'a Requirement,
+//             ) {
+//                 if let Some(map) = self.conflicts.get_mut(req) {
+//                     map.insert(conflict, other);
+//                 } else {
+//                     let mut map = HashMap::new();
+//                     map.insert(conflict, other);
+
+//                     self.conflicts.insert(req, map);
+//                 }
+//             }
+//         }
+
+//         let mut deps = Dependencies::new();
+
+//         for hash in packages {
+//             let index = self
+//                 .indices
+//                 .get_by_left(&hash)
+//                 .ok_or(Error::IndexNotFound(hash))?;
+//             for (edge, node) in self.relations.children(*index).iter(&self.relations) {
+//                 let req = self
+//                     .relations
+//                     .edge_weight(edge)
+//                     .expect("INTERNAL: Must be present.");
+
+//                 let hash = self
+//                     .indices
+//                     .get_by_right(&node)
+//                     .expect("INTERNAL: Must be present.");
+
+//                 if let Some(set) = deps.options.get_mut(req) {
+//                     set.insert(*hash);
+//                 } else {
+//                     let mut set = HashSet::new();
+//                     set.insert(*hash);
+
+//                     deps.options.insert(req, set);
+//                 }
+
+//                 if let Some(other) = deps.names.get_mut(req.name()) && other != &req {
+//                     let conflict = Conflict::Name(req.name());
+//                     deps.add_conflict(conflict, req, other);
+//                     *other = req;
+//                 } else {
+//                     deps.names.insert(req.name(), req);
+//                 }
+
+//                 for component in req.components() {
+//                     if let Some(other) = deps.components.get_mut(component) && other != &req {
+//                         let conflict = Conflict::Component(component);
+//                         deps.add_conflict(conflict, req, other);
+//                         *other = req;
+//                     } else {
+//                         deps.components.insert(component, req);
+//                     }
+//                 }
+//             }
+//         }
+
+//         let mut result = HashSet::new();
+
+//         for (req, conflicts) in deps.conflicts {}
+
+//         'names: for (name, set) in names {
+//             if set.len() > 1 {
+//                 // check if components are equal
+//                 // amd then if there is a package in options that matches all version requirements
+//                 // put it in result
+//                 // remove requirement from options
+//                 let mut components: HashSet<Component> = HashSet::new();
+//                 let mut version_reqs = HashSet::new();
+
+//                 for req in set {
+//                     components.extend(req.components().clone());
+//                     version_reqs.insert(req.version_req());
+//                 }
+
+//                 for req in set {
+//                     options.remove(req);
+
+//                     'hashes: for hash in options.get(req).expect("INTERNAL: Must be present.") {
+//                         let package = self.nodes.get(hash).expect("INTERNAL: Must be present.");
+//                         if package.provides.is_superset(&components) {
+//                             for version_req in version_reqs {
+//                                 if !version_req.matches(&package.version) {
+//                                     continue 'hashes;
+//                                 }
+//                             }
+//                             result.insert(*hash);
+//                             continue 'names;
+//                         }
+//                     }
+//                 }
+//                 return Err(Error::RequirementNameCollision(name.to_owned()));
+//             }
+//         }
+
+//         for (component, set) in components {
+//             if set.len() > 1 {
+//                 // check if names are equal
+//                 // amd then if there is a package in options that matches all version requirements
+//                 // put it in result
+//                 // remove requirement from options
+
+//                 let mut name = None;
+//                 let mut version_reqs = HashSet::new();
+
+//                 for req in set {
+//                     if let Some(name) = name && name != req.name() {
+//                         return Err(Error::RequirementNameCollision(name.to_owned()));
+//                     } else {
+//                         name = Some(req.name());
+//                     }
+//                     version_reqs.insert(req.version_req());
+//                 }
+
+//                 for req in set {
+//                     options.remove(req);
+//                 }
+//             }
+//         }
+
+//         for (_req, set) in options {
+//             let hash = set.drain().next().expect("INTERNAL: Must be present.");
+//             result.insert(hash);
+//         }
+
+//         Ok(result)
+//     }
+
+//     fn gather_requirements<'a, 'b>(
+//         &'a self,
+//         hash: &'b u64,
+//         collector: &'a mut HashMap<&'a Requirement, HashSet<u64>>,
+//     ) {
+//         if let Some(idx) = self.indices.get_by_left(&hash) {
+//             for (req, hash) in
+//                 self.relations
+//                     .children(*idx)
+//                     .iter(&self.relations)
+//                     .map(|(edge, node)| {
+//                         let req = self
+//                             .relations
+//                             .edge_weight(edge)
+//                             .expect("INTERNAL: Must be present.");
+//                         let hash = self
+//                             .indices
+//                             .get_by_right(&node)
+//                             .expect("INTERNAL: Must be present.");
+//                         (req, hash)
+//                     })
+//             {
+//                 self.gather_requirements(hash, collector);
+//                 if let Some(set) = collector.get_mut(req) {
+//                     set.insert(*hash);
+//                 } else {
+//                     let mut set = HashSet::new();
+//                     set.insert(*hash);
+//                     collector.insert(req, set);
+//                 }
+//             }
+//         }
+//     }
+
+//     // TODO will probably overflow with many dependencies, put depdencies in state ?
+
+//     // fn inner_get_depdendencies(
+//     //     &self,
+//     //     hash: &u64,
+//     //     collector: &mut HashSet<Box<dyn Dependency>>,
+//     // ) -> Result<()> {
+//     //     let idx = self
+//     //         .hash_idx_map
+//     //         .get_by_left(hash)
+//     //         .ok_or(Error::PackageNotFound(*hash))?;
+//     //     for (edge, node) in self.relations.children(*idx).iter(&self.relations) {
+//     //         let version_req = self
+//     //             .relations
+//     //             .edge_weight(edge)
+//     //             .expect("Edge must be present.");
+//     //         let hash = self
+//     //             .hash_idx_map
+//     //             .get_by_right(&node)
+//     //             .expect("Every index must be in the hash-index map");
+//     //         let package = self.map.get(hash).expect("Must be present");
+//     //         let dependency = package.into_dependency(*version_req, self.get_dependencies(&hash)?);
+//     //         collector.insert(dependency);
+//     //     }
+//     //     Ok(())
+//     // }
+// }
 
 /// A Store that contains all the packages installed by any user
 #[derive(Debug)]
@@ -272,8 +440,6 @@ impl Store {
 
             let res = db.indices.insert(hash, idx);
             assert!(!res.did_overwrite());
-
-            db.requires.insert(hash, HashSet::new());
         })?;
 
         self.database.read(|db| -> Result<()> {
@@ -303,20 +469,26 @@ impl Store {
         self.database.write(|db| {
             if let Some(idx) = db.indices.get_by_left(parent) {
                 if db.relations.node_weight(*idx).is_some() && db.nodes.contains_key(parent) {
+                    let requirement = package.clone().into_requirement(version_req);
+
+                    if let Some(set) = db.provided_by.get_mut(&requirement) {
+                        set.insert(hash);
+                    } else {
+                        let mut set = HashSet::new();
+                        set.insert(hash);
+                        db.provided_by.insert(requirement.clone(), set);
+                    }
+
                     let (_, child_idx) =
                         db.relations
-                            .add_child(*idx, version_req.clone(), package.version.clone());
+                            .add_child(*idx, requirement, package.version.clone());
 
-                    let res = db.nodes.insert(hash, package.clone());
+                    let res = db.nodes.insert(hash, package);
                     assert!(res.is_none());
 
                     let res = db.indices.insert(hash, child_idx);
                     assert!(!res.did_overwrite());
-                    let deps = db
-                        .requires
-                        .get_mut(parent)
-                        .expect("Dependencies must be created on insertion.");
-                    deps.insert(package.into_dependency(version_req, HashSet::new()));
+
                     Ok(())
                 } else {
                     Err(Error::PackageNotFound(*parent))
@@ -353,18 +525,26 @@ impl Store {
         self.database.write(|db| {
             if let Some(idx) = db.indices.get_by_left(child) {
                 if db.relations.node_weight(*idx).is_some() && db.nodes.contains_key(child) {
+                    let requirement = package.clone().into_requirement(version_req);
+
+                    if let Some(set) = db.provided_by.get_mut(&requirement) {
+                        set.insert(hash);
+                    } else {
+                        let mut set = HashSet::new();
+                        set.insert(hash);
+                        db.provided_by.insert(requirement.clone(), set);
+                    }
+
                     let (_, parent_idx) =
                         db.relations
-                            .add_parent(*idx, version_req.clone(), package.version.clone());
+                            .add_parent(*idx, requirement, package.version.clone());
 
                     let res = db.nodes.insert(hash, package.clone());
                     assert!(res.is_none());
 
                     let res = db.indices.insert(hash, parent_idx);
                     assert!(!res.did_overwrite());
-                    let mut deps = HashSet::new();
-                    deps.insert(package.into_dependency(version_req, HashSet::new()));
-                    db.requires.insert(hash, deps);
+
                     Ok(())
                 } else {
                     Err(Error::PackageNotFound(*child))
@@ -500,10 +680,10 @@ impl Store {
     }
 
     /// Searches for the children of the specified package
-    pub fn get_children(&self, hash: &u64) -> Result<HashSet<u64>> {
-        let children = self.database.read(|db| db.get_children(hash))?;
-        children.ok_or(Error::PackageNotFound(*hash))
-    }
+    // pub fn get_children(&self, hash: &u64) -> Result<HashSet<u64>> {
+    //     let children = self.database.read(|db| db.get_children(hash))?;
+    //     children.ok_or(Error::PackageNotFound(*hash))
+    // }
 
     // TODO maybe flush just after every io operation
 
