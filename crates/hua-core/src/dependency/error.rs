@@ -1,19 +1,16 @@
 use snafu::prelude::*;
 
-use crate::{Component, Conflict};
+use super::Conflict;
+use crate::Component;
 
-#[derive(Debug, Snafu)]
+#[derive(Debug, Snafu, PartialEq, Eq)]
 pub enum DependencyError {
     #[snafu(display("Cycle detected: {error}"))]
     CycleDetected { error: String },
     #[snafu(display("Found conflicting name {name}"))]
     ConflictingName { name: String },
-    #[snafu(display("Found conflicting names"))]
-    ConflictingNames,
     #[snafu(display("Found conflicting component {component}"))]
     ConflictingComponent { component: Component },
-    #[snafu(display("Found conflicting components"))]
-    ConflictingComponents,
 }
 
 pub type DependencyResult<T> = std::result::Result<T, DependencyError>;

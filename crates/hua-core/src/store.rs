@@ -86,7 +86,7 @@ impl Store {
     }
 
     /// Calculates a new path in the store for the package.
-    pub fn get_package_path(&self, package: &Package, index: &usize) -> PathBuf {
+    fn get_package_path(&self, package: &Package, index: &usize) -> PathBuf {
         let name_version_hash = format!("{}-{}-{}", package.name(), package.version(), index);
         PathBuf::from(name_version_hash)
     }
@@ -111,6 +111,15 @@ impl Store {
         self.copy_to_store(path, self.path.join(new_path))?;
 
         Ok(index)
+    }
+
+    pub fn extend<'a, P: AsRef<Path>>(
+        &'a mut self,
+        packages: impl IntoIterator<Item = (Package, P)> + 'a,
+    ) -> impl Iterator<Item = Result<usize>> + 'a {
+        packages
+            .into_iter()
+            .map(|(package, path)| self.insert(package, path))
     }
 
     /// Links only the package at the specified path
@@ -236,19 +245,10 @@ impl Store {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::BTreeSet,
-        fs::{self, File},
-        path::Path,
-    };
-
-    use relative_path::RelativePathBuf;
-    use semver::Version;
-    use temp_dir::TempDir;
-
-    use crate::{Binary, Component, Package, Store};
-
     use super::PACKAGES_DB;
+    use crate::{support::*, Store};
+    use std::{fs, path::Path};
+    use temp_dir::TempDir;
 
     fn store_create_at_path(path: &Path) -> Store {
         let store = Store::create_at_path(&path).unwrap();
@@ -259,22 +259,6 @@ mod tests {
         assert!(store_db.is_file());
 
         store
-    }
-
-    fn package(path: &Path, name: &str) -> Package {
-        let package_bin_path = path.join("bin");
-        fs::create_dir_all(&package_bin_path).unwrap();
-
-        let shell_name = format!("{}.sh", name);
-        let shell_path = package_bin_path.join(&shell_name);
-
-        let _bin = File::create(&shell_path).unwrap();
-        let mut provides = BTreeSet::new();
-        provides.insert(Component::Binary(Binary::Shell(RelativePathBuf::from(
-            &format!("bin/{}", shell_name),
-        ))));
-
-        Package::new(name, Version::new(1, 0, 0), provides, BTreeSet::new())
     }
 
     #[test]
@@ -321,18 +305,14 @@ mod tests {
         let package_path = temp_dir.child("package");
 
         let mut store = store_create_at_path(&path);
-        let package = package(&package_path, "package");
+        let package = pkg("package", &package_path);
 
         let index = store.insert(package, package_path).unwrap();
 
-        store
-            .read_packages(|pkgs| {
-                let package = pkgs.get_index(index).unwrap();
-                let package_store_path = store.get_package_path(&package, &index);
-                assert!(package_store_path.exists());
-                assert!(package_store_path.is_dir());
-            })
-            .unwrap();
+        let package = store.get(index).unwrap();
+        let package_store_path = store.get_package_path(&package, &index);
+        assert!(package_store_path.exists());
+        assert!(package_store_path.is_dir());
     }
 
     // #[test]

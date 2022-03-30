@@ -4,7 +4,7 @@ use daggy::{NodeIndex, WouldCycle};
 use relative_path::RelativePathBuf;
 use semver::{Version, VersionReq};
 
-use crate::Requirement;
+use crate::{Package, Requirement};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -16,7 +16,8 @@ pub enum Error {
     GenerationNotFound(usize),
     GenerationAlreadyPresent(usize),
     PackageAlreadyPresent(u64),
-    PackageNotFound(u64),
+    PackageNotFoundByIndex(u64),
+    PackageNotFound(Package),
     DependencyProvideCollision(Requirement),
     VersionMissmatch((Version, VersionReq)),
     HashNotFound(NodeIndex<usize>),
@@ -72,10 +73,12 @@ impl std::fmt::Display for Error {
                 id
             )),
             Self::TerminatingPath => f.write_str("The path given terminates at ./. or /"),
-            Self::PackageNotFound(h) => f.write_str(&format!(
-                "The package with the following hash could not be found: {}",
-                h
-            )),
+            Self::PackageNotFound(p) => {
+                f.write_str(&format!("The package could not be found: {p}"))
+            }
+            Self::PackageNotFoundByIndex(i) => {
+                f.write_str(&format!("Package not found by index {i}"))
+            }
             Self::PackageAlreadyPresent(p) => {
                 f.write_str(&format!("The package was already present: {}", p))
             }

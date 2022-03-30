@@ -21,7 +21,7 @@
   <p align="center">
     A simple package manager mixing traditional and next-gen concepts
     <br />
-    <a href="https://mordragt.github.io/hua/hua-core/"><strong>Explore the docs »</strong></a>
+    <a href="https://mordragt.github.io/hua/doc/hua_core/"><strong>Explore the docs »</strong></a>
     <br />
     <br />
     <a href="https://github.com/MordragT/hua/issues">Report Bug</a>

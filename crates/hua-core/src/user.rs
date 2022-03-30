@@ -186,40 +186,19 @@ impl UserManager {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{BTreeSet, HashSet};
-    use std::fs::{self, File};
-
-    use relative_path::RelativePathBuf;
-    use semver::Version;
-    use temp_dir::TempDir;
-
-    use crate::components::ComponentPaths;
-    use crate::{Binary, Component, Package, Store};
-
-    use super::{User, UserManager};
-
     use super::USERS_DB;
+    use super::{User, UserManager};
+    use crate::components::ComponentPaths;
+    use crate::{support::*, Store};
+    use std::fs;
+    use temp_dir::TempDir;
 
     fn user_manager_insert_package(temp_dir: &TempDir) -> (UserManager, Store, usize) {
         let path = temp_dir.child("user");
         let store_path = temp_dir.child("store");
         let package_path = temp_dir.child("package");
 
-        let package = {
-            let package_bin_path = package_path.join("bin");
-            fs::create_dir_all(&package_bin_path).unwrap();
-
-            let shell_path = package_bin_path.join("package.sh");
-
-            let _bin = File::create(&shell_path).unwrap();
-            let mut provides = BTreeSet::new();
-
-            provides.insert(Component::Binary(Binary::Shell(RelativePathBuf::from(
-                "bin/package.sh",
-            ))));
-
-            Package::new("package", Version::new(1, 0, 0), provides, BTreeSet::new())
-        };
+        let package = pkg("package", &package_path);
 
         let mut store = Store::create_at_path(&store_path).unwrap();
         let index = store.insert(package, package_path).unwrap();

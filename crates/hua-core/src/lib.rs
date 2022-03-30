@@ -1,9 +1,10 @@
 #![feature(let_chains)]
 #![feature(slice_pattern)]
+#![feature(assert_matches)]
 
 // mod cache;
 mod components;
-mod dependency;
+pub mod dependency;
 mod download;
 mod error;
 pub mod extra;
@@ -12,11 +13,12 @@ mod package;
 mod persist;
 mod recipe;
 mod store;
+mod support;
 mod user;
 
 // pub use cache::CacheClient;
 pub use components::*;
-pub use dependency::*;
+pub use dependency::{DependencyGraph, Requirement};
 pub use download::Downloader;
 pub use error::Error;
 pub use generation::*;
