@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["TempDir","The path of an existing writable directory in a system temporary directory."]]});

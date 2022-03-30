@@ -175,22 +175,6 @@ impl Store {
         todo!()
     }
 
-    /// Searches the store for the given name and do a specified task on them.
-    pub fn search<R, T: Fn(&Package) -> R>(&self, name: &str, task: T) -> Result<Vec<R>> {
-        let res = self.database.read(|set| {
-            set.iter()
-                .filter_map(|package| {
-                    if package.name().starts_with(name) {
-                        Some(task(package))
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<R>>()
-        })?;
-        Ok(res)
-    }
-
     pub unsafe fn get_unchecked_index_of(&self, package: &Package) -> usize {
         self.pkgs.get_index_of(package).unwrap_unchecked()
     }

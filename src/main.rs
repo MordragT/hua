@@ -66,7 +66,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .value_of("NAME")
                     .expect("When searching the store a package name has to be given.");
                 let store = Store::open(STORE_PATH)?;
-                store.search(name, |key, package| println!("Hash: {}: {}", key, package))?;
+                if let Some(package) = store.find_by_name(name) {
+                    let index = unsafe { store.get_unchecked_index_of(&package) };
+                    println!("Index {index}: {package}");
+                }
+                println!("Package not found");
             }
             Some(("collect-garbage", _)) => {
                 let mut store = Store::open(STORE_PATH)?;
@@ -131,17 +135,19 @@ fn main() -> Result<(), Box<dyn Error>> {
             let mut store = Store::open(STORE_PATH)?;
             let mut user_manager = UserManager::open(USER_MANAGER_PATH)?;
 
-            let hash = *store
-                .search(name, |key, _package| *key)?
-                .first()
-                .expect(&format!("Package with the name {} not found", name));
-            user_manager.remove_package(&hash, &mut store)?;
+            todo!()
 
-            let global_paths = ComponentPaths::from_path(GLOBAL_PATH);
-            user_manager.switch_global_links(&global_paths)?;
+            // let hash = *store
+            //     .search(name, |key, _package| *key)?
+            //     .first()
+            //     .expect(&format!("Package with the name {} not found", name));
+            // user_manager.remove_package(&hash, &mut store)?;
 
-            store.flush()?;
-            user_manager.flush()?;
+            // let global_paths = ComponentPaths::from_path(GLOBAL_PATH);
+            // user_manager.switch_global_links(&global_paths)?;
+
+            // store.flush()?;
+            // user_manager.flush()?;
         }
         Some(("shell", _sub_matches)) => todo!(),
         _ => unreachable!(),

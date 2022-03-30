@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["BackendError","An error returned by a Backend implementor"],["DeSerError","An error returned by a `DeSer` implementor"],["RustbreakError","The different kinds of errors that can be returned"]],"type":[["BackendResult","The type alias used for backends"],["DeSerResult","The type alias used for `DeSer`s"],["Result","A simple type alias for errors"]]});
