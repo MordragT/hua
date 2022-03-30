@@ -42,6 +42,8 @@ impl User {
     }
 }
 
+// TODO: use put_data and get_data and flush instead of db.read and db.write
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct Users {
     pub current: usize,
@@ -121,15 +123,15 @@ impl UserManager {
     /// Inserts a package into the current user.
     /// If the package was not present return true and create a new generation with the package.
     /// If it was present false is returned.
-    pub fn insert_package(&mut self, hash: &u64, store: &mut Store) -> Result<bool> {
-        self.write_current(|user| user.generation_manager.insert_package(hash, store))?
+    pub fn insert_package(&mut self, index: usize, store: &mut Store) -> Result<bool> {
+        self.write_current(|user| user.generation_manager.insert_package(index, store))?
     }
 
     /// Remove a package from the current user.
     /// If the package was present return true and create a new generation without the package.
     /// If it was not present false is returned.
-    pub fn remove_package(&mut self, hash: &u64, store: &mut Store) -> Result<bool> {
-        self.write_current(|user| user.generation_manager.remove_package(hash, store))?
+    pub fn remove_package(&mut self, index: usize, store: &mut Store) -> Result<bool> {
+        self.write_current(|user| user.generation_manager.remove_package(index, store))?
     }
 
     /// Removes the specified generation.
@@ -156,15 +158,16 @@ impl UserManager {
     }
 
     /// Checks wether the package is stored inside any generation of all users.
-    pub fn contains_package(&self, hash: &u64) -> Result<bool> {
-        let res = self.database.read(|db| {
-            db.list
-                .iter()
-                .flat_map(|(_id, user)| user.generation_manager.packages())
-                .find(|key| *key == hash)
-                .is_some()
-        })?;
-        Ok(res)
+    pub fn contains_package(&self, index: usize) -> Result<bool> {
+        // let res = self.database.read(|db| {
+        //     db.list
+        //         .iter()
+        //         .flat_map(|(_id, user)| user.generation_manager.packages())
+        //         .find(|key| *key == index)
+        //         .is_some()
+        // })?;
+        // Ok(res)
+        todo!()
     }
 
     /// Returns the path of the user manager
@@ -197,7 +200,7 @@ mod tests {
 
     use super::USERS_DB;
 
-    fn user_manager_insert_package(temp_dir: &TempDir) -> (UserManager, Store, u64) {
+    fn user_manager_insert_package(temp_dir: &TempDir) -> (UserManager, Store, usize) {
         let path = temp_dir.child("user");
         let store_path = temp_dir.child("store");
         let package_path = temp_dir.child("package");
@@ -215,16 +218,16 @@ mod tests {
                 "bin/package.sh",
             ))));
 
-            Package::new("package", Version::new(1, 0, 0), provides)
+            Package::new("package", Version::new(1, 0, 0), provides, BTreeSet::new())
         };
 
         let mut store = Store::create_at_path(&store_path).unwrap();
-        let hash = store.insert(package, package_path).unwrap();
+        let index = store.insert(package, package_path).unwrap();
 
         let mut user_manager = UserManager::create_at_path(&path).unwrap();
-        assert!(user_manager.insert_package(&hash, &mut store).unwrap());
+        assert!(user_manager.insert_package(index, &mut store).unwrap());
 
-        (user_manager, store, hash)
+        (user_manager, store, index)
     }
 
     #[test]
@@ -287,14 +290,14 @@ mod tests {
     fn user_manager_insert_package_false() {
         let temp_dir = TempDir::new().unwrap();
         let (mut user_manager, mut store, hash) = user_manager_insert_package(&temp_dir);
-        assert!(!user_manager.insert_package(&hash, &mut store).unwrap());
+        assert!(!user_manager.insert_package(hash, &mut store).unwrap());
     }
 
     #[test]
     fn user_manager_remove_package_true() {
         let temp_dir = TempDir::new().unwrap();
         let (mut user_manager, mut store, hash) = user_manager_insert_package(&temp_dir);
-        assert!(user_manager.remove_package(&hash, &mut store).unwrap());
+        assert!(user_manager.remove_package(hash, &mut store).unwrap());
     }
 
     #[test]
@@ -306,7 +309,7 @@ mod tests {
         let mut store = Store::create_at_path(&store_path).unwrap();
         let mut user_manager = UserManager::create_at_path(&path).unwrap();
 
-        assert!(!user_manager.remove_package(&129238423, &mut store).unwrap());
+        assert!(!user_manager.remove_package(129238423, &mut store).unwrap());
     }
 
     #[test]
@@ -358,7 +361,7 @@ mod tests {
         let path = temp_dir.child("user");
 
         let user_manager = UserManager::create_at_path(&path).unwrap();
-        let res = user_manager.contains_package(&123804230842).unwrap();
+        let res = user_manager.contains_package(123804230842).unwrap();
 
         assert!(!res);
     }
@@ -368,7 +371,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let (user_manager, _, hash) = user_manager_insert_package(&temp_dir);
 
-        let res = user_manager.contains_package(&hash).unwrap();
+        let res = user_manager.contains_package(hash).unwrap();
 
         assert!(res);
     }

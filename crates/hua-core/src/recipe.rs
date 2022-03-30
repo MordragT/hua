@@ -12,6 +12,9 @@ use crate::{
     UserManager,
 };
 
+pub const LINUX: u8 = 0x01;
+pub const X86_64: u8 = 0x01;
+
 /// A Recipe to build an Package from.
 #[derive(Debug)]
 pub struct Recipe {

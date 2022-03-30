@@ -1,38 +1,16 @@
-use reqwest::Url;
-use serde::{Deserialize, Serialize};
-
-use crate::{error::*, Component, ComponentPaths, Components, OptionalComponentPaths};
+use crate::{error::*, Component, ComponentPaths};
 use std::{
-    cmp::Ordering,
     collections::HashSet,
-    fmt, fs,
-    hash::{Hash, Hasher},
+    fs,
+    hash::Hash,
     os::unix,
     path::{Path, PathBuf},
 };
 
-pub struct Remote<T> {
-    pub data: T,
-    pub source: Url,
-}
-
-impl<T> Remote<T> {
-    pub fn new(data: T, source: Url) -> Self {
-        Self { data, source }
-    }
-}
-
-#[derive(Debug)]
-pub enum Source {
-    Local { path: PathBuf, checksum: u64 },
-    Http { url: Url, checksum: u64 },
-}
-
-pub const LINUX: u8 = 0x01;
-pub const X86_64: u8 = 0x01;
-
 // TODO: better naming
-// TODO io_operations should be able to return something (like when linking the linked paths)
+// TODO: tests
+// TODO: return IntoIterator
+// TODO: own Error and Result types
 
 pub fn io_task_into<P, Q, T, R, F, C>(from: P, into: Q, task: &T, fold: &F) -> Result<C>
 where
@@ -189,10 +167,10 @@ pub fn link_component_paths(
 /// Links components to component paths.
 /// Creates the directories of the destination if they do not exist
 /// Returns a list of all links created
-pub fn link_components<P: AsRef<Path>>(
+pub fn link_components<'a, P: AsRef<Path>>(
     base: P,
-    from: &HashSet<Component>,
-    to: &ComponentPaths,
+    from: impl IntoIterator<Item = &'a Component>,
+    to: &'a ComponentPaths,
 ) -> Result<HashSet<PathBuf>> {
     let base = base.as_ref();
 
@@ -203,107 +181,6 @@ pub fn link_components<P: AsRef<Path>>(
         inner_io_task_to(
             &component.relative_path().to_path(base),
             &to.binary,
-            &symlink,
-            &fold_hash_set_path_buf,
-            &mut collector,
-        )?;
-    }
-
-    Ok(collector)
-}
-
-// pub fn link_components<P: AsRef<Path>>(
-//     base: P,
-//     from: &Components,
-//     to: &ComponentPaths,
-// ) -> Result<HashSet<PathBuf>> {
-//     let base = base.as_ref();
-
-//     to.create_dirs()?;
-//     let mut collector = HashSet::new();
-
-//     for p in from.binaries() {
-//         inner_io_task_to(
-//             &p.relative_path().to_path(base),
-//             &to.binary,
-//             &symlink,
-//             &fold_hash_set_path_buf,
-//             &mut collector,
-//         )?;
-//     }
-//     for p in from.configs() {
-//         inner_io_task_to(
-//             &p.to_path(base),
-//             &to.binary,
-//             &symlink,
-//             &fold_hash_set_path_buf,
-//             &mut collector,
-//         )?;
-//     }
-//     for p in from.libraries() {
-//         inner_io_task_to(
-//             &p.to_path(base),
-//             &to.binary,
-//             &symlink,
-//             &fold_hash_set_path_buf,
-//             &mut collector,
-//         )?;
-//     }
-//     for p in from.shares() {
-//         inner_io_task_to(
-//             &p.to_path(base),
-//             &to.binary,
-//             &symlink,
-//             &fold_hash_set_path_buf,
-//             &mut collector,
-//         )?;
-//     }
-
-//     Ok(collector)
-// }
-
-/// Links optional component paths to normal component paths
-/// Creates the directories of the destination if they do not exist
-/// Returns a list of all links created
-pub fn link_optional_component_paths(
-    from: &OptionalComponentPaths,
-    to: &ComponentPaths,
-) -> Result<HashSet<PathBuf>> {
-    to.create_dirs()?;
-
-    let mut collector = HashSet::new();
-
-    if let Some(p) = &from.binary {
-        inner_io_task_to(
-            &p,
-            &to.binary,
-            &symlink,
-            &fold_hash_set_path_buf,
-            &mut collector,
-        )?;
-    }
-    if let Some(p) = &from.config {
-        inner_io_task_to(
-            &p,
-            &to.config,
-            &symlink,
-            &fold_hash_set_path_buf,
-            &mut collector,
-        )?;
-    }
-    if let Some(p) = &from.library {
-        inner_io_task_to(
-            &p,
-            &to.library,
-            &symlink,
-            &fold_hash_set_path_buf,
-            &mut collector,
-        )?;
-    }
-    if let Some(p) = &from.share {
-        inner_io_task_to(
-            &p,
-            &to.share,
             &symlink,
             &fold_hash_set_path_buf,
             &mut collector,
@@ -329,22 +206,4 @@ pub fn copy_into<P: AsRef<Path>, Q: AsRef<Path>>(from: P, into: Q) -> Result<u64
 /// Copies the content of the origin inside the destination
 pub fn copy_to<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<u64> {
     io_task_to(from, to, &copy, &fold_u64)
-}
-
-// TODO use File and Reader to hash contents not read_dir
-
-/// Calculates a hash with all the files under the given path
-pub fn hash_path<P: AsRef<Path>, H: Hasher>(path: P, state: &mut H) -> Result<()> {
-    let path = path.as_ref();
-    if path.is_dir() {
-        path.read_dir()?
-            .map(|res| match res {
-                Ok(entry) => hash_path(entry.path(), state),
-                Err(e) => Err(e.into()),
-            })
-            .collect::<Result<()>>()
-    } else {
-        fs::read(path)?.hash(state);
-        Ok(())
-    }
 }

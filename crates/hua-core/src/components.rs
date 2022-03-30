@@ -1,17 +1,11 @@
-use std::{
-    collections::hash_set,
-    collections::HashSet,
-    fs,
-    hash::Hash,
-    io,
-    iter::{Chain, Map},
-    path::{Path, PathBuf},
-};
-
 use relative_path::{RelativePath, RelativePathBuf};
 use serde::{Deserialize, Serialize};
-
-use crate::{error::Result, Error};
+use std::{
+    fmt, fs,
+    hash::Hash,
+    io,
+    path::{Path, PathBuf},
+};
 
 #[derive(PartialEq, Eq, Debug, Hash, Serialize, Deserialize, Clone, PartialOrd, Ord)]
 pub enum Binary {
@@ -38,6 +32,15 @@ impl Into<RelativePathBuf> for Binary {
     }
 }
 
+impl fmt::Display for Binary {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Shell(p) => f.write_str(&format!("Shell {p}")),
+            Self::Elf(p) => f.write_str(&format!("Elf {p}")),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash, PartialOrd, Ord)]
 pub enum Component {
     Binary(Binary),
@@ -56,99 +59,13 @@ impl Component {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub struct Components {
-    binaries: HashSet<Binary>,
-    configs: HashSet<RelativePathBuf>,
-    libraries: HashSet<RelativePathBuf>,
-    shares: HashSet<RelativePathBuf>,
-}
-
-impl Components {
-    pub fn is_disjoint(&self, other: &Components) -> bool {
-        self.binaries.is_disjoint(&other.binaries)
-            && self.configs.is_disjoint(&other.configs)
-            && self.libraries.is_disjoint(&other.libraries)
-            && self.shares.is_disjoint(&other.shares)
-    }
-
-    pub fn binaries(&self) -> &HashSet<Binary> {
-        &self.binaries
-    }
-
-    pub fn configs(&self) -> &HashSet<RelativePathBuf> {
-        &self.configs
-    }
-
-    pub fn libraries(&self) -> &HashSet<RelativePathBuf> {
-        &self.libraries
-    }
-
-    pub fn shares(&self) -> &HashSet<RelativePathBuf> {
-        &self.shares
-    }
-
-    pub fn new_binary(binary: &str) -> Result<Self> {
-        let relative_path = RelativePathBuf::from(binary);
-        let mut binaries = HashSet::new();
-
-        if !relative_path.starts_with("bin") {
-            return Err(Error::WrongPathParent(relative_path));
-        } else if let Some(ext) = relative_path.extension() && ext == "sh" {
-            binaries.insert(Binary::Shell(relative_path));
-        } else {
-            binaries.insert(Binary::Elf(relative_path));
-        }
-
-        Ok(Self {
-            binaries,
-            configs: HashSet::new(),
-            libraries: HashSet::new(),
-            shares: HashSet::new(),
-        })
-    }
-}
-
-impl IntoIterator for Components {
-    type Item = RelativePathBuf;
-    type IntoIter = Chain<
-        Map<hash_set::IntoIter<Binary>, fn(Binary) -> RelativePathBuf>,
-        Chain<
-            hash_set::IntoIter<RelativePathBuf>,
-            Chain<hash_set::IntoIter<RelativePathBuf>, hash_set::IntoIter<RelativePathBuf>>,
-        >,
-    >;
-
-    fn into_iter(self) -> Self::IntoIter {
-        let res = self
-            .binaries
-            .into_iter()
-            .map(Binary::into as fn(Binary) -> RelativePathBuf)
-            .chain(
-                self.configs
-                    .into_iter()
-                    .chain(self.libraries.into_iter().chain(self.shares.into_iter())),
-            );
-        res
-    }
-}
-
-impl Hash for Components {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        for binary in &self.binaries {
-            binary.hash(state);
-        }
-
-        for config in &self.configs {
-            config.hash(state);
-        }
-
-        for library in &self.libraries {
-            library.hash(state);
-        }
-
-        for share in &self.shares {
-            share.hash(state);
+impl fmt::Display for Component {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Binary(b) => f.write_str(&format!("Binary {b}")),
+            Self::Config(p) => f.write_str(&format!("Config {p}")),
+            Self::Library(p) => f.write_str(&format!("Library {p}")),
+            Self::Share(p) => f.write_str(&format!("Share {p}")),
         }
     }
 }
@@ -199,52 +116,6 @@ impl ComponentPaths {
         }
         if !self.share.exists() {
             fs::create_dir(&self.share)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct OptionalComponentPaths {
-    pub binary: Option<PathBuf>,
-    pub config: Option<PathBuf>,
-    pub library: Option<PathBuf>,
-    pub share: Option<PathBuf>,
-}
-
-impl OptionalComponentPaths {
-    pub fn new<T, U, V, W>(
-        binary: Option<T>,
-        config: Option<U>,
-        library: Option<V>,
-        share: Option<W>,
-    ) -> Self
-    where
-        T: AsRef<Path>,
-        U: AsRef<Path>,
-        V: AsRef<Path>,
-        W: AsRef<Path>,
-    {
-        Self {
-            binary: binary.map(|p| p.as_ref().to_owned()),
-            config: config.map(|p| p.as_ref().to_owned()),
-            library: library.map(|p| p.as_ref().to_owned()),
-            share: share.map(|p| p.as_ref().to_owned()),
-        }
-    }
-
-    pub fn create_dirs(&self) -> io::Result<()> {
-        if let Some(p) = &self.binary && !p.exists() {
-            fs::create_dir(&p)?;
-        }
-        if let Some(p) = &self.config && !p.exists() {
-            fs::create_dir(&p)?;
-        }
-        if let Some(p) = &self.library && !p.exists() {
-            fs::create_dir(&p)?;
-        }
-        if let Some(p) = &self.share && !p.exists() {
-            fs::create_dir(&p)?;
         }
         Ok(())
     }

@@ -52,7 +52,7 @@ impl GenerationManager {
 
     fn link_global(&mut self, id: usize, global_paths: &ComponentPaths) -> Result<()> {
         let gen = self.list.get(&id).ok_or(Error::GenerationNotFound(id))?;
-        self.global_links = extra::link_component_paths(gen.component_paths(), global_paths)?;
+        self.global_links = extra::fs::link_component_paths(gen.component_paths(), global_paths)?;
         Ok(())
     }
 
@@ -79,15 +79,15 @@ impl GenerationManager {
         }
     }
 
-    pub fn insert_package(&mut self, hash: &u64, store: &mut Store) -> Result<bool> {
-        if self.get_current().contains(hash) {
+    pub fn insert_package(&mut self, index: usize, store: &mut Store) -> Result<bool> {
+        if self.get_current().contains(index) {
             Ok(false)
         } else {
             self.counter += 1;
             let mut gen = Generation::create_under(&self.path, self.counter)?;
 
             gen.link_packages(self.get_current().packages(), store)?;
-            gen.link_package(hash, store)?;
+            gen.link_package(index, store)?;
 
             let old = self.list.insert(self.counter, gen);
             assert!(old.is_none());
@@ -97,7 +97,7 @@ impl GenerationManager {
         }
     }
 
-    pub fn remove_package(&mut self, hash: &u64, store: &mut Store) -> Result<bool> {
+    pub fn remove_package(&mut self, index: usize, store: &mut Store) -> Result<bool> {
         // if self.get_current().contains(hash) {
         //     self.counter += 1;
         //     let mut gen = Generation::create_under(&self.path, self.counter)?;

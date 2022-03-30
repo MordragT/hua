@@ -14,9 +14,11 @@ daggy = { version = "0.8", features = ["serde-1"] }
 rustbreak = "2.0"
 serde = "1.0"
 pot = "1.0"
-bimap = { version = "0.6", features = ["serde"] }
+# bimap = { version = "0.6", features = ["serde"] }
 reqwest = { version = "0.11", features = ["blocking"] }
 url = "2.2"
 temp-dir = "0.1"
 semver = { version = "1.0", features = ["serde"] }
 relative-path = { version = "1.6", features = ["serde"] }
+indexmap = { version = "1.8", features = ["serde"] }
+snafu = "0.7"

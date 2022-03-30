@@ -1,6 +1,6 @@
 use std::{ffi::OsString, io, path::PathBuf};
 
-use daggy::NodeIndex;
+use daggy::{NodeIndex, WouldCycle};
 use relative_path::RelativePathBuf;
 use semver::{Version, VersionReq};
 
@@ -11,6 +11,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub enum Error {
     RequirementNameCollision(String),
+    NoRequiredMatches(Requirement),
     GenerationIsInUse,
     GenerationNotFound(usize),
     GenerationAlreadyPresent(usize),
@@ -32,6 +33,7 @@ pub enum Error {
     Reqwest(reqwest::Error),
     Url(url::ParseError),
     RecipeNoUnpackSource,
+    Cycle(String),
 }
 
 impl std::error::Error for Error {}
@@ -39,6 +41,8 @@ impl std::error::Error for Error {}
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Cycle(s) => f.write_str(&s),
+            Self::NoRequiredMatches(r) => f.write_str(&format!("No required matches found: {}", r)),
             Self::RequirementNameCollision(s) => f.write_str(&format!(
                 "Requirements could not be resolved due to colliding name: {}",
                 s
@@ -133,5 +137,11 @@ impl From<reqwest::Error> for Error {
 impl From<url::ParseError> for Error {
     fn from(e: url::ParseError) -> Self {
         Self::Url(e)
+    }
+}
+
+impl From<daggy::WouldCycle<Vec<&Requirement>>> for Error {
+    fn from(e: daggy::WouldCycle<Vec<&Requirement>>) -> Self {
+        Self::Cycle(e.to_string())
     }
 }

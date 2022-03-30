@@ -83,7 +83,7 @@ impl Generation {
         todo!()
     }
 
-    pub fn link_package(&mut self, hash: &u64, store: &mut Store) -> Result<()> {
+    pub fn link_package(&mut self, index: usize, store: &mut Store) -> Result<()> {
         // let mut hashes = store.link_package(hash, &self.component_paths)?;
         // let packages = self
         //     .packages
@@ -115,8 +115,9 @@ impl Generation {
         &self.packages
     }
 
-    pub fn contains(&self, hash: &u64) -> bool {
-        self.packages.contains(hash)
+    pub fn contains(&self, index: usize) -> bool {
+        // self.packages.contains(index)
+        todo!()
     }
 
     pub fn component_paths(&self) -> &ComponentPaths {
