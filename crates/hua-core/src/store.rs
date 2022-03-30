@@ -85,6 +85,9 @@ impl Store {
         &mut self.pkgs
     }
 
+    // TODO return relative path for private
+    // and make one public which joins self path
+
     /// Calculates a new path in the store for the package.
     fn get_package_path(&self, package: &Package, index: &usize) -> PathBuf {
         let name_version_hash = format!("{}-{}-{}", package.name(), package.version(), index);
@@ -125,18 +128,22 @@ impl Store {
     /// Links only the package at the specified path
     pub fn link_package(&self, index: usize, to: &ComponentPaths) -> Result<()> {
         let package = &self.pkgs[index];
-        extra::fs::link_components(&self.path, package.provides(), to)?;
+        extra::fs::link_components(
+            &self.path.join(self.get_package_path(&package, &index)),
+            package.provides(),
+            to,
+        )?;
         Ok(())
     }
 
     /// Links all the packages to the specified path.
-    pub fn link_packages(
+    pub fn link_packages<'a>(
         &self,
-        indices: impl IntoIterator<Item = usize>,
+        indices: impl IntoIterator<Item = &'a usize>,
         to: &ComponentPaths,
     ) -> Result<()> {
         for index in indices {
-            self.link_package(index, to)?;
+            self.link_package(*index, to)?;
         }
         Ok(())
     }
@@ -310,9 +317,15 @@ mod tests {
         let index = store.insert(package, package_path).unwrap();
 
         let package = store.get(index).unwrap();
-        let package_store_path = store.get_package_path(&package, &index);
+        let package_store_path = store.path().join(store.get_package_path(&package, &index));
+
         assert!(package_store_path.exists());
         assert!(package_store_path.is_dir());
+
+        let package_store_file = package_store_path.join("lib/package.so");
+
+        assert!(package_store_file.exists());
+        assert!(package_store_file.is_file());
     }
 
     // #[test]

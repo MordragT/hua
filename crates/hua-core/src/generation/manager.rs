@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
-
+use super::*;
 use crate::{components::ComponentPaths, Store};
-use crate::{error::*, extra, Generation};
+use crate::{extra, Generation, GenerationBuilder, Requirement};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::{
     fs,
@@ -18,16 +18,18 @@ pub struct GenerationManager {
 }
 
 impl GenerationManager {
-    pub fn create_under<P: AsRef<Path>>(path: P) -> Result<Self> {
+    pub fn create_under<P: AsRef<Path>>(path: P) -> GenerationResult<Self> {
         let path = path.as_ref().join("generations");
 
         if !path.exists() {
-            fs::create_dir(&path)?;
+            fs::create_dir(&path).context(IoSnafu)?;
         }
 
         let current = 0;
         let mut list = HashMap::new();
-        list.insert(current, Generation::create_under(&path, current)?);
+
+        let generation = GenerationBuilder::new(current).under(&path).empty()?;
+        list.insert(current, generation);
 
         Ok(Self {
             path,
@@ -38,25 +40,26 @@ impl GenerationManager {
         })
     }
 
-    fn unlink_global(&mut self) -> Result<()> {
+    fn unlink_global(&mut self) -> GenerationResult<()> {
         for link in self.global_links.drain() {
-            fs::remove_file(link)?;
+            fs::remove_file(link).context(IoSnafu)?;
         }
 
         Ok(())
     }
 
-    fn link_current_global(&mut self, global_paths: &ComponentPaths) -> Result<()> {
+    fn link_current_global(&mut self, global_paths: &ComponentPaths) -> GenerationResult<()> {
         self.link_global(self.current, global_paths)
     }
 
-    fn link_global(&mut self, id: usize, global_paths: &ComponentPaths) -> Result<()> {
-        let gen = self.list.get(&id).ok_or(Error::GenerationNotFound(id))?;
-        self.global_links = extra::fs::link_component_paths(gen.component_paths(), global_paths)?;
+    fn link_global(&mut self, id: usize, global_paths: &ComponentPaths) -> GenerationResult<()> {
+        let gen = self.list.get(&id).context(NotFoundSnafu { id })?;
+        self.global_links = extra::fs::link_component_paths(gen.component_paths(), global_paths)
+            .context(IoSnafu)?;
         Ok(())
     }
 
-    pub fn switch_global_links(&mut self, global_paths: &ComponentPaths) -> Result<()> {
+    pub fn switch_global_links(&mut self, global_paths: &ComponentPaths) -> GenerationResult<()> {
         self.unlink_global()?;
         self.link_current_global(global_paths)
     }
@@ -65,13 +68,13 @@ impl GenerationManager {
         &self.global_links
     }
 
-    pub fn remove_generation(&mut self, id: usize) -> Result<bool> {
+    pub fn remove_generation(&mut self, id: usize) -> GenerationResult<bool> {
         if id == self.current {
-            Err(Error::GenerationIsInUse)
+            Err(GenerationError::InUse { id })
         } else {
             match self.list.remove(&id) {
                 Some(gen) => {
-                    fs::remove_dir_all(gen.path)?;
+                    fs::remove_dir_all(gen.path()).context(IoSnafu)?;
                     Ok(true)
                 }
                 None => Ok(false),
@@ -79,17 +82,26 @@ impl GenerationManager {
         }
     }
 
-    pub fn insert_package(&mut self, index: usize, store: &mut Store) -> Result<bool> {
-        if self.get_current().contains(index) {
+    pub fn insert_requirement(
+        &mut self,
+        requirement: Requirement,
+        store: &Store,
+    ) -> GenerationResult<bool> {
+        if self.get_current().contains_requirement(&requirement) {
             Ok(false)
         } else {
             self.counter += 1;
-            let mut gen = Generation::create_under(&self.path, self.counter)?;
 
-            gen.link_packages(self.get_current().packages(), store)?;
-            gen.link_package(index, store)?;
+            let mut requirements = self.get_current().requirements().clone();
+            requirements.insert(requirement);
 
-            let old = self.list.insert(self.counter, gen);
+            let generation = GenerationBuilder::new(self.counter)
+                .under(&self.path)
+                .requires(requirements)
+                .resolve(store)?
+                .build(store)?;
+
+            let old = self.list.insert(self.counter, generation);
             assert!(old.is_none());
 
             self.current = self.counter;
@@ -97,36 +109,41 @@ impl GenerationManager {
         }
     }
 
-    pub fn remove_package(&mut self, index: usize, store: &mut Store) -> Result<bool> {
-        // if self.get_current().contains(hash) {
-        //     self.counter += 1;
-        //     let mut gen = Generation::create_under(&self.path, self.counter)?;
+    pub fn remove_requirement(
+        &mut self,
+        requirement: &Requirement,
+        store: &Store,
+    ) -> GenerationResult<bool> {
+        if self.get_current().contains_requirement(requirement) {
+            self.counter += 1;
 
-        //     let mut to_remove = store.get_children(hash)?;
-        //     to_remove.insert(*hash);
+            let mut requirements = self.get_current().requirements().clone();
+            requirements.remove(requirement);
 
-        //     let packages = self
-        //         .get_current()
-        //         .packages()
-        //         .difference(&to_remove)
-        //         .map(|hash| *hash)
-        //         .collect::<HashSet<u64>>();
+            let generation = GenerationBuilder::new(self.counter)
+                .under(&self.path)
+                .requires(requirements)
+                .resolve(store)?
+                .build(store)?;
 
-        //     gen.link_packages(&packages, store)?;
+            let old = self.list.insert(self.counter, generation);
+            assert!(old.is_none());
 
-        //     let old = self.list.insert(self.counter, gen);
-        //     assert!(old.is_none());
-
-        //     self.current = self.counter;
-        //     Ok(true)
-        // } else {
-        //     Ok(false)
-        // }
-        todo!()
+            self.current = self.counter;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
-    pub fn packages(&self) -> impl Iterator<Item = &u64> {
-        self.list.iter().flat_map(|(_id, gen)| &gen.packages)
+    pub fn packages(&self) -> impl Iterator<Item = &usize> {
+        self.list
+            .iter()
+            .flat_map(|(_id, gen)| gen.packages().iter())
+    }
+
+    pub fn contains_package(&self, index: usize) -> bool {
+        self.packages().find(|idx| **idx == index).is_some()
     }
 
     pub fn list_current_packages(&self) {
@@ -139,26 +156,17 @@ impl GenerationManager {
         }
     }
 
-    pub fn switch_to(&mut self, id: usize) -> Result<()> {
+    pub fn switch_to(&mut self, id: usize) -> GenerationResult<()> {
         if self.list.contains_key(&id) {
             self.current = id;
 
             Ok(())
         } else {
-            Err(Error::GenerationNotFound(id))
+            Err(GenerationError::NotFound { id })
         }
     }
 
     fn get_current(&self) -> &Generation {
-        self.list
-            .get(&self.current)
-            .expect("The current generation should always be present in the manager")
-    }
-
-    #[allow(dead_code)]
-    fn get_current_mut(&mut self) -> &mut Generation {
-        self.list
-            .get_mut(&self.current)
-            .expect("The current generation should always be present in the manager")
+        unsafe { self.list.get(&self.current).unwrap_unchecked() }
     }
 }

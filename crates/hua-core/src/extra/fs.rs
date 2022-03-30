@@ -1,8 +1,9 @@
-use crate::{error::*, Component, ComponentPaths};
+use crate::{Component, ComponentPaths};
 use std::{
     collections::HashSet,
     fs,
     hash::Hash,
+    io::{Error, ErrorKind, Result},
     os::unix,
     path::{Path, PathBuf},
 };
@@ -42,9 +43,12 @@ where
     let from = from.canonicalize()?;
     let name = from
         .file_name()
-        .ok_or(Error::TerminatingPath)?
+        .ok_or(Error::new(
+            ErrorKind::UnexpectedEof,
+            "Unexpected terminating path",
+        ))?
         .to_str()
-        .ok_or(Error::OsStringConversion)?;
+        .ok_or(Error::new(ErrorKind::InvalidData, "Invalid utf-8"))?;
     let into = into.join(name);
 
     if from.is_dir() {
@@ -178,9 +182,15 @@ pub fn link_components<'a, P: AsRef<Path>>(
     let mut collector = HashSet::new();
 
     for component in from {
-        inner_io_task_to(
+        let to = match component {
+            Component::Binary(_) => &to.binary,
+            Component::Config(_) => &to.config,
+            Component::Library(_) => &to.library,
+            Component::Share(_) => &to.share,
+        };
+        inner_io_task_into(
             &component.relative_path().to_path(base),
-            &to.binary,
+            to,
             &symlink,
             &fold_hash_set_path_buf,
             &mut collector,

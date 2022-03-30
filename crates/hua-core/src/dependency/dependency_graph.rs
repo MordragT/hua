@@ -2,7 +2,7 @@ use crate::{Component, Package, Store};
 use daggy::{Dag, NodeIndex};
 use std::collections::{HashMap, HashSet};
 
-use super::{error::DependencyResult, Conflict, DependencyError, Requirement, Step};
+use super::{Conflict, DependencyError, DependencyResult, Requirement, Step};
 
 #[derive(Debug)]
 pub struct DependencyGraph<'a> {
@@ -174,14 +174,27 @@ impl<'a> DependencyGraph<'a> {
         &mut self,
         requirements: impl IntoIterator<Item = &'a Requirement>,
         store: &'a Store,
-    ) -> DependencyResult<bool> {
+    ) -> DependencyResult<impl Iterator<Item = usize> + '_> {
         let to_resolve: Vec<&Requirement> = requirements.into_iter().collect();
         let mut choices = HashMap::new();
 
         let _nodes = self.resolve_reqs(to_resolve, store, &mut choices)?;
         self.resolve_choices(choices, store)?;
 
-        Ok(self.is_resolved())
+        if self.is_resolved() {
+            let iter = self
+                .relations
+                .graph()
+                .node_weights()
+                .map(|node| unsafe { node.as_resolved_unchecked() });
+            Ok(iter)
+        } else {
+            Err(DependencyError::RequirementsNotResolvable)
+        }
+    }
+
+    pub fn nodes(&self) -> impl Iterator<Item = &Step> {
+        self.relations.graph().node_weights()
     }
 }
 
@@ -249,14 +262,14 @@ mod tests {
             .collect::<Result<Vec<usize>, Error>>()
             .unwrap();
 
-        let is_resolved = graph.resolve(reqs, &store).unwrap();
+        let indices = graph.resolve(reqs, &store).unwrap();
 
-        assert!(is_resolved);
+        assert_eq!(4, indices.count());
         println!("Graph: {graph:?}");
     }
 
     #[test]
-    fn dependency_graph_resolve_ok_false() {
+    fn dependency_graph_resolve_err_not_resolvable() {
         let temp_dir = TempDir::new().unwrap();
         let store_path = temp_dir.child("store");
 
@@ -277,10 +290,12 @@ mod tests {
             .collect::<Result<Vec<usize>, Error>>()
             .unwrap();
 
-        let is_resolved = graph.resolve(reqs, &store).unwrap();
+        let err = graph
+            .resolve(reqs, &store)
+            .map(|iter| iter.count())
+            .unwrap_err();
 
-        assert!(!is_resolved);
-        println!("Graph: {graph:?}");
+        assert_matches!(err, DependencyError::RequirementsNotResolvable)
     }
 
     #[test]
@@ -305,7 +320,10 @@ mod tests {
             .collect::<Result<Vec<usize>, Error>>()
             .unwrap();
 
-        let err = graph.resolve(reqs, &store).unwrap_err();
+        let err = graph
+            .resolve(reqs, &store)
+            .map(|iter| iter.count())
+            .unwrap_err();
 
         assert_matches!(err, DependencyError::CycleDetected { error: _ });
     }
@@ -337,7 +355,10 @@ mod tests {
             .collect::<Result<Vec<usize>, Error>>()
             .unwrap();
 
-        let err = graph.resolve(reqs, &store).unwrap_err();
+        let err = graph
+            .resolve(reqs, &store)
+            .map(|iter| iter.count())
+            .unwrap_err();
 
         assert_eq!(
             err,
@@ -371,7 +392,10 @@ mod tests {
             .collect::<Result<Vec<usize>, Error>>()
             .unwrap();
 
-        let err = graph.resolve(reqs, &store).unwrap_err();
+        let err = graph
+            .resolve(reqs, &store)
+            .map(|iter| iter.count())
+            .unwrap_err();
 
         assert_matches!(err, DependencyError::ConflictingComponent { component: _ });
     }

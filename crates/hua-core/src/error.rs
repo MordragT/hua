@@ -1,6 +1,6 @@
 use std::{ffi::OsString, io, path::PathBuf};
 
-use daggy::{NodeIndex, WouldCycle};
+use daggy::NodeIndex;
 use relative_path::RelativePathBuf;
 use semver::{Version, VersionReq};
 

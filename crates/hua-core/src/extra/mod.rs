@@ -1,8 +1,8 @@
-use crate::error::*;
 use reqwest::Url;
 use semver::{Comparator, Op, Version, VersionReq};
 use std::{
     hash::{Hash, Hasher},
+    io,
     path::{Path, PathBuf},
 };
 
@@ -41,7 +41,7 @@ pub fn exact_version_req(v: Version) -> VersionReq {
 // TODO use File and Reader to hash contents not read_dir
 
 /// Calculates a hash with all the files under the given path
-pub fn hash_path<P: AsRef<Path>, H: Hasher>(path: P, state: &mut H) -> Result<()> {
+pub fn hash_path<P: AsRef<Path>, H: Hasher>(path: P, state: &mut H) -> io::Result<()> {
     let path = path.as_ref();
     if path.is_dir() {
         path.read_dir()?
@@ -49,7 +49,7 @@ pub fn hash_path<P: AsRef<Path>, H: Hasher>(path: P, state: &mut H) -> Result<()
                 Ok(entry) => hash_path(entry.path(), state),
                 Err(e) => Err(e.into()),
             })
-            .collect::<Result<()>>()
+            .collect::<io::Result<()>>()
     } else {
         std::fs::read(path)?.hash(state);
         Ok(())
