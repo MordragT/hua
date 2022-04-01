@@ -1,11 +1,6 @@
-use crate::{
-    extra::{self, hash::Blake3, path::ComponentPaths},
-    Requirement, UserManager,
-};
-use rs_merkle::MerkleProof;
-use rustbreak::PathDatabase;
+use crate::{extra::path::ComponentPathBuf, UserManager};
 use std::{
-    collections::{BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     fs::{self},
     os::unix,
     path::{Path, PathBuf},
@@ -69,31 +64,6 @@ impl<B: Backend> Store<B> {
         self.backend.objects_mut()
     }
 
-    // TODO return relative path for private
-    // and make one public which joins self path
-
-    /// Calculates a new path in the store for the package.
-    fn get_package_path(&self, package: &Package, index: &usize) -> PathBuf {
-        let name_version_hash = format!("{}-{}-{}", package.name(), package.version(), index);
-        PathBuf::from(name_version_hash)
-    }
-
-    fn copy_to_store<P: AsRef<Path>, Q: AsRef<Path>>(&self, from: P, to: Q) -> StoreResult<()> {
-        let from = from.as_ref();
-        let to = to.as_ref();
-        fs::create_dir(to).context(IoSnafu)?;
-        extra::fs::copy_to(from, to).context(IoSnafu)?;
-        Ok(())
-    }
-
-    // fn object_path_in_store(&self, package_id: &ObjectId, object_id: &ObjectId) -> Option<PathBuf> {
-    //     if let Some(parent) = self.packages().path_in_store(package_id, &self.path) && let Some(obj) = self.objects().get(object_id) {
-    //         Some(obj.to_path(parent))
-    //     } else {
-    //         None
-    //     }
-    // }
-
     fn get_full_object_path(&self, object_id: &ObjectId) -> Option<PathBuf> {
         if let Some((obj, ext)) = self.objects().get_full(&object_id) {
             let package_path = self.packages().path_in_store(&ext.package_id, &self.path);
@@ -104,7 +74,25 @@ impl<B: Backend> Store<B> {
         }
     }
 
-    // TODO maybe do not return Err if package already inserted, but bool or enum
+    fn solve_objects(
+        id: ObjectId,
+        trees: &BTreeMap<ObjectId, Tree>,
+        blobs: &BTreeMap<ObjectId, Blob>,
+        resolved: &mut HashSet<ObjectId>,
+    ) -> bool {
+        if let Some(tree) = trees.get(&id) {
+            resolved.insert(id);
+            for child in &tree.children {
+                Self::solve_objects(*child, trees, blobs, resolved);
+            }
+            true
+        } else if let Some(_blob) = blobs.get(&id) {
+            resolved.insert(id);
+            true
+        } else {
+            false
+        }
+    }
 
     /// Inserts a package into the store and returns true if the package was not present and was inserted
     /// and false if it was already present.
@@ -121,60 +109,80 @@ impl<B: Backend> Store<B> {
             name,
             version,
             requires,
-            provides,
+            blobs,
+            trees,
         } = package;
 
-        let mut blobs = BTreeSet::new();
+        let mut pkg_blobs = BTreeSet::new();
 
         if self.packages().contains(&package_id) {
             Ok(false)
         } else {
-            for (id, object) in provides {
-                let obj_dest = object.to_path(&path_in_store);
+            let mut resolved = HashSet::new();
 
-                if let Object::Blob(blob) = &object {
-                    blobs.insert(blob.clone());
-                }
+            // should be ordered (by BTreeMap and Object::cmp) so that trees with lower depth come first
+            for (id, tree) in trees.iter() {
+                let dest = tree.to_path(&path_in_store);
 
-                if self.objects().contains(&id) {
-                    let from = self.get_full_object_path(&id).unwrap();
+                if resolved.contains(id) {
+                    continue;
+                } else if self.objects().contains(&id) {
+                    let original = self
+                        .get_full_object_path(&id)
+                        .ok_or(StoreError::ObjectNotFoundById { id: *id })?;
 
-                    if obj_dest.exists() {
-                        if obj_dest.is_dir() {
-                            fs::remove_dir_all(&obj_dest).context(IoSnafu)?;
-                        } else {
-                            fs::remove_file(&obj_dest).context(IoSnafu)?;
-                        }
-                    }
-                    unix::fs::symlink(from, &obj_dest).context(IoSnafu)?;
+                    unix::fs::symlink(original, dest).context(IoSnafu)?;
+                    Self::solve_objects(*id, &trees, &blobs, &mut resolved);
 
-                    assert!(self.objects_mut().insert_link(&id, obj_dest));
+                    let ext = unsafe { self.objects_mut().get_ext_mut_unchecked(id) };
+                    assert!(ext
+                        .links
+                        .insert(package_id, Link::new(tree.path.clone(), *id))
+                        .is_none());
                 } else {
-                    let obj_src = object.to_path(&path);
+                    fs::create_dir(dest).context(IoSnafu)?;
 
-                    match object.kind() {
-                        ObjectKind::Blob => {
-                            if let Some(parent) = obj_dest.parent() && !parent.exists() {
-                                fs::create_dir_all(parent).context(IoSnafu)?
-                            }
-                            fs::copy(obj_src, obj_dest).context(IoSnafu)?;
-                        }
-                        ObjectKind::Tree => {
-                            // No need to copy anything as long as the path is created
-                            // The blobs will be copied anyway
-                            if !obj_dest.exists() {
-                                fs::create_dir_all(&obj_dest).context(IoSnafu)?
-                            }
-                        }
-                    }
+                    let old = self
+                        .objects_mut()
+                        .insert(package_id, *id, tree.clone().into());
+                    assert!(old.is_none())
+                }
+            }
 
-                    assert!(self.objects_mut().insert(package_id, id, object).is_none());
+            for (id, blob) in blobs {
+                pkg_blobs.insert(blob.clone());
+
+                let dest = blob.to_path(&path_in_store);
+
+                if resolved.contains(&id) {
+                    continue;
+                } else if self.objects().contains(&id) {
+                    let original = self
+                        .get_full_object_path(&id)
+                        .ok_or(StoreError::ObjectNotFoundById { id })?;
+
+                    unix::fs::symlink(original, dest).context(IoSnafu)?;
+
+                    let ext = unsafe { self.objects_mut().get_ext_mut_unchecked(&id) };
+                    assert!(ext
+                        .links
+                        .insert(package_id, Link::new(blob.path, id))
+                        .is_none());
+                } else {
+                    let source = blob.to_path(&path);
+                    fs::copy(source, dest).context(IoSnafu)?;
+
+                    let old = self.objects_mut().insert(package_id, id, blob.into());
+                    assert!(old.is_none())
                 }
             }
 
             assert!(self
                 .packages_mut()
-                .insert(package_id, PackageDesc::new(name, version, blobs, requires))
+                .insert(
+                    package_id,
+                    PackageDesc::new(name, version, pkg_blobs, requires)
+                )
                 .is_none());
 
             Ok(true)
@@ -191,27 +199,60 @@ impl<B: Backend> Store<B> {
     }
 
     /// Links only the package at the specified path
-    pub fn link_package(&self, id: &ObjectId, to: &ComponentPaths) -> StoreResult<()> {
-        let package = self
+    pub fn link_package(&self, id: &PackageId, to: &ComponentPathBuf) -> StoreResult<()> {
+        let root = self
             .packages()
-            .get(id)
-            .ok_or(StoreError::PackageNotFoundById { id: *id });
+            .path_in_store(id, &self.path)
+            .ok_or(StoreError::PackageNotFoundById { id: *id })?;
 
-        todo!()
+        to.create_dirs().context(IoSnafu)?;
 
-        // let package = &self.pkgs[index];
-        // extra::fs::link_components(
-        //     &self.path.join(self.get_package_path(&package, &index)),
-        //     package.provides(),
-        //     to,
-        // )?;
+        self.objects()
+            .read_children(id, |object| match object.kind() {
+                ObjectKind::Blob => {
+                    let absolute = object.to_path(&root);
+                    let relative = absolute.strip_prefix(&root).context(StripPrefixSnafu)?;
+
+                    let dest = if relative.starts_with("bin/") {
+                        to.binary
+                            .join(relative.strip_prefix("bin/").context(StripPrefixSnafu)?)
+                    } else if relative.starts_with("lib/") {
+                        to.library
+                            .join(relative.strip_prefix("lib/").context(StripPrefixSnafu)?)
+                    } else if relative.starts_with("cfg/") {
+                        to.config
+                            .join(relative.strip_prefix("cfg/").context(StripPrefixSnafu)?)
+                    } else if relative.starts_with("etc/") {
+                        to.config
+                            .join(relative.strip_prefix("etc/").context(StripPrefixSnafu)?)
+                    } else if relative.starts_with("share/") {
+                        to.share
+                            .join(relative.strip_prefix("share/").context(StripPrefixSnafu)?)
+                    } else {
+                        return Err(StoreError::UnsupportedFilePath {
+                            path: relative.to_owned(),
+                        });
+                    };
+
+                    if let Some(parent) = dest.parent() && !parent.exists() {
+                        fs::create_dir_all(parent).context(IoSnafu)?;
+                    }
+
+                    unix::fs::symlink(absolute, dest).context(IoSnafu)?;
+
+                    Ok(())
+                }
+                _ => Ok(()),
+            })
+            .collect::<StoreResult<()>>()?;
+        Ok(())
     }
 
     /// Links all the packages to the specified path.
     pub fn link_packages<'a>(
         &self,
-        indices: impl IntoIterator<Item = &'a ObjectId>,
-        to: &ComponentPaths,
+        indices: impl IntoIterator<Item = &'a PackageId>,
+        to: &ComponentPathBuf,
     ) -> StoreResult<()> {
         for index in indices {
             self.link_package(index, to)?;
@@ -224,7 +265,7 @@ impl<B: Backend> Store<B> {
         let indices = user_manager
             .package_indices()
             .map(|index| *index)
-            .collect::<HashSet<ObjectId>>();
+            .collect::<HashSet<PackageId>>();
 
         todo!()
     }
@@ -245,7 +286,7 @@ impl<B: Backend> Store<B> {
 #[cfg(test)]
 mod tests {
     use super::PACKAGES_DB;
-    use crate::{store::backend::LocalBackend, support::*, Store};
+    use crate::{extra::path::ComponentPathBuf, store::backend::LocalBackend, support::*, Store};
     use std::{fs, path::Path};
     use temp_dir::TempDir;
 
@@ -356,42 +397,34 @@ mod tests {
     //     assert_eq!(removed.len(), 0);
     // }
 
-    // #[test]
-    // fn store_link_package() {
-    //     let temp_dir = TempDir::new().unwrap();
-    //     let path = temp_dir.child("store");
-    //     let parent_path = temp_dir.child("parent");
-    //     let child_path = temp_dir.child("child");
+    #[test]
+    fn store_link_package() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.child("store");
+        let package_path = temp_dir.child("package");
 
-    //     let mut store = store_create_at_path(&path);
+        let mut store = store_create_at_path(&path);
 
-    //     let parent = package(&parent_path, "parent");
-    //     let parent_hash = store.insert(parent, parent_path).unwrap();
+        let package = pkg("package", &package_path);
+        let _package_store_path = package.path_in_store(store.path());
+        let package_id = package.id;
 
-    //     let child = package(&child_path, "child");
-    //     let child_hash = store
-    //         .add_child(&parent_hash, child, VersionReq::STAR, child_path)
-    //         .unwrap();
+        let _ = store.insert(package, package_path).unwrap();
 
-    //     let global_temp_path = temp_dir.child("global");
-    //     fs::create_dir(&global_temp_path).unwrap();
-    //     let global_paths = ComponentPaths::from_path(&global_temp_path);
-    //     global_paths.create_dirs().unwrap();
+        let global_temp_path = temp_dir.child("global");
+        fs::create_dir(&global_temp_path).unwrap();
+        let global_paths = ComponentPathBuf::from_path(&global_temp_path);
+        global_paths.create_dirs().unwrap();
 
-    //     let linked = store.link_package(&parent_hash, &global_paths).unwrap();
-    //     assert_eq!(linked.len(), 2);
+        store.link_package(&package_id, &global_paths).unwrap();
 
-    //     let mut eq_linked = HashSet::new();
-    //     eq_linked.insert(child_hash);
-    //     eq_linked.insert(parent_hash);
-    //     assert_eq!(linked, eq_linked);
+        // let mut eq_linked = HashSet::new();
+        // eq_linked.insert(child_hash);
+        // eq_linked.insert(parent_hash);
+        // assert_eq!(linked, eq_linked);
 
-    //     let child_bin_link = global_paths.binary.join("child.sh");
-    //     assert!(child_bin_link.exists());
-    //     assert!(child_bin_link.is_symlink());
-
-    //     let parent_bin_link = global_paths.binary.join("parent.sh");
-    //     assert!(parent_bin_link.exists());
-    //     assert!(parent_bin_link.is_symlink());
-    // }
+        let package_link = global_paths.library.join("package.so");
+        assert!(package_link.exists());
+        assert!(package_link.is_symlink());
+    }
 }

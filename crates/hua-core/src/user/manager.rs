@@ -1,7 +1,7 @@
-use crate::extra::path::ComponentPaths;
+use crate::extra::path::ComponentPathBuf;
 use crate::extra::persist::Pot;
 use crate::generation::GenerationManager;
-use crate::store::{Backend, ObjectId};
+use crate::store::{Backend, PackageId};
 use crate::Store;
 use crate::{Requirement, User};
 use rustbreak::PathDatabase;
@@ -146,7 +146,7 @@ impl UserManager {
     }
 
     /// Unlinks the old generation and links the new one globally
-    pub fn switch_global_links(&mut self, global_paths: &ComponentPaths) -> UserResult<()> {
+    pub fn switch_global_links(&mut self, global_paths: &ComponentPathBuf) -> UserResult<()> {
         Ok(self
             .current_generation_manager_mut()
             .switch_global_links(global_paths)
@@ -163,7 +163,7 @@ impl UserManager {
         self.current_generation_manager().list_generations();
     }
 
-    pub fn package_indices(&self) -> impl Iterator<Item = &ObjectId> {
+    pub fn package_indices(&self) -> impl Iterator<Item = &PackageId> {
         self.users
             .list
             .iter()
@@ -172,7 +172,7 @@ impl UserManager {
     }
 
     /// Checks wether the package is stored inside any generation of all users.
-    pub fn contains_package_index(&self, index: &ObjectId) -> bool {
+    pub fn contains_package_index(&self, index: &PackageId) -> bool {
         self.package_indices().find(|idx| *idx == index).is_some()
     }
 
@@ -198,7 +198,7 @@ impl UserManager {
 mod tests {
     use super::UserManager;
     use super::USERS_DB;
-    use crate::extra::path::ComponentPaths;
+    use crate::extra::path::ComponentPathBuf;
     use crate::store::LocalBackend;
     use crate::user::UserError;
     use crate::{support::*, Store};
@@ -400,7 +400,7 @@ mod tests {
         let global_path = temp_dir.child("global");
         fs::create_dir(&global_path).unwrap();
 
-        let global_paths = ComponentPaths::from_path(global_path);
+        let global_paths = ComponentPathBuf::from_path(global_path);
         global_paths.create_dirs().unwrap();
 
         user_manager.switch_global_links(&global_paths).unwrap();
@@ -434,7 +434,7 @@ mod tests {
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
-        let id = one.id();
+        let id = one.id;
         let _ = store.insert(one, one_path).unwrap();
 
         let req = req("one", ">0.0.1");

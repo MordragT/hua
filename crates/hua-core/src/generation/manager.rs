@@ -1,6 +1,6 @@
 use super::*;
-use crate::extra::path::ComponentPaths;
-use crate::store::{Backend, ObjectId};
+use crate::extra::path::ComponentPathBuf;
+use crate::store::{Backend, PackageId};
 use crate::Store;
 use crate::{extra, Generation, GenerationBuilder, Requirement};
 use serde::{Deserialize, Serialize};
@@ -50,18 +50,18 @@ impl GenerationManager {
         Ok(())
     }
 
-    fn link_current_global(&mut self, global_paths: &ComponentPaths) -> GenerationResult<()> {
+    fn link_current_global(&mut self, global_paths: &ComponentPathBuf) -> GenerationResult<()> {
         self.link_global(self.current, global_paths)
     }
 
-    fn link_global(&mut self, id: usize, global_paths: &ComponentPaths) -> GenerationResult<()> {
+    fn link_global(&mut self, id: usize, global_paths: &ComponentPathBuf) -> GenerationResult<()> {
         let gen = self.list.get(&id).context(NotFoundSnafu { id })?;
         self.global_links = extra::fs::link_component_paths(gen.component_paths(), global_paths)
             .context(IoSnafu)?;
         Ok(())
     }
 
-    pub fn switch_global_links(&mut self, global_paths: &ComponentPaths) -> GenerationResult<()> {
+    pub fn switch_global_links(&mut self, global_paths: &ComponentPathBuf) -> GenerationResult<()> {
         self.unlink_global()?;
         self.link_current_global(global_paths)
     }
@@ -138,13 +138,13 @@ impl GenerationManager {
         }
     }
 
-    pub fn packages(&self) -> impl Iterator<Item = &ObjectId> {
+    pub fn packages(&self) -> impl Iterator<Item = &PackageId> {
         self.list
             .iter()
             .flat_map(|(_id, gen)| gen.packages().iter())
     }
 
-    pub fn contains_package(&self, id: &ObjectId) -> bool {
+    pub fn contains_package(&self, id: &PackageId) -> bool {
         self.packages().find(|idx| *idx == id).is_some()
     }
 

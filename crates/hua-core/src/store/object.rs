@@ -1,10 +1,59 @@
 use relative_path::RelativePathBuf;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, HashSet},
-    fmt,
+    cmp::Ordering,
+    collections::HashMap,
     path::{Path, PathBuf},
 };
+
+use super::{ObjectId, PackageId};
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Blob {
+    pub path: RelativePathBuf,
+}
+
+impl Blob {
+    pub fn new(path: RelativePathBuf) -> Self {
+        Self { path }
+    }
+
+    pub fn to_path<P: AsRef<Path>>(&self, base: P) -> PathBuf {
+        self.path.to_path(base)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Tree {
+    pub path: RelativePathBuf,
+    pub children: Vec<ObjectId>,
+}
+
+impl Tree {
+    pub fn new(path: RelativePathBuf, children: Vec<ObjectId>) -> Self {
+        Self { path, children }
+    }
+
+    pub fn to_path<P: AsRef<Path>>(&self, base: P) -> PathBuf {
+        self.path.to_path(base)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Link {
+    pub link: RelativePathBuf,
+    pub source: ObjectId,
+}
+
+impl Link {
+    pub fn new(link: RelativePathBuf, source: ObjectId) -> Self {
+        Self { link, source }
+    }
+
+    pub fn to_path<P: AsRef<Path>>(&self, base: P) -> PathBuf {
+        self.link.to_path(base)
+    }
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ObjectKind {
@@ -13,41 +62,45 @@ pub enum ObjectKind {
     // Link,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Blob {
-    pub path: RelativePathBuf,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum Object {
-    Tree {
-        path: RelativePathBuf,
-        children: Vec<ObjectId>,
-    },
-    // Link {
-    //     path: RelativePathBuf,
-    //     to: ObjectId,
-    // },
+    Tree(Tree),
+    // Link(Link),
     Blob(Blob),
 }
 
 impl Object {
     pub fn kind(&self) -> ObjectKind {
         match &self {
-            Self::Tree {
-                path: _,
-                children: _,
-            } => ObjectKind::Tree,
-            Self::Blob(Blob { path: _ }) => ObjectKind::Blob,
-            // Self::Link { path: _, to: _ } => ObjectKind::Link,
+            Self::Tree(_) => ObjectKind::Tree,
+            Self::Blob(_) => ObjectKind::Blob,
+            // Self::Link(_) => ObjectKind::Link,
         }
     }
 
-    pub fn to_path<P: AsRef<Path>>(&self, parent: P) -> PathBuf {
+    pub fn to_path<P: AsRef<Path>>(&self, base: P) -> PathBuf {
         match &self {
-            Self::Tree { path, children: _ }
-            | Self::Blob(Blob { path })
-            /*| Self::Link { path, to: _ }*/ => path.to_path(parent),
+            Self::Tree(tree) => tree.to_path(base),
+            Self::Blob(blob) => blob.to_path(base),
+            // Self::Link(link) => link.to_path(base),
+        }
+    }
+
+    pub fn as_tree(&self) -> Option<&Tree> {
+        match &self {
+            Self::Tree(tree) => Some(tree),
+            _ => None,
+        }
+    }
+
+    pub fn is_tree(&self) -> bool {
+        self.kind() == ObjectKind::Tree
+    }
+
+    pub fn into_tree(self) -> Option<Tree> {
+        match self {
+            Self::Tree(tree) => Some(tree),
+            _ => None,
         }
     }
 
@@ -68,74 +121,78 @@ impl Object {
             _ => None,
         }
     }
+
+    // pub fn as_link(&self) -> Option<&Link> {
+    //     match &self {
+    //         Self::Link(link) => Some(link),
+    //         _ => None,
+    //     }
+    // }
+
+    // pub fn is_link(&self) -> bool {
+    //     self.kind() == ObjectKind::Link
+    // }
+
+    // pub fn into_link(self) -> Option<Link> {
+    //     match self {
+    //         Self::Link(link) => Some(link),
+    //         _ => None,
+    //     }
+    // }
 }
+
+impl Ord for Object {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (&self, other) {
+            // (Object::Link(_), Object::Tree(_)) => Ordering::Greater,
+            // (Object::Link(_), Object::Blob(_)) => Ordering::Greater,
+            // (Object::Link(link), Object::Link(other)) => link.cmp(other),
+            // (Object::Tree(_), Object::Link(_)) => Ordering::Less,
+            (Object::Tree(_), Object::Blob(_)) => Ordering::Greater,
+            (Object::Tree(tree), Object::Tree(other)) => tree.cmp(other),
+            // (Object::Blob(_), Object::Link(_)) => Ordering::Less,
+            (Object::Blob(_), Object::Tree(_)) => Ordering::Less,
+            (Object::Blob(blob), Object::Blob(other)) => blob.cmp(other),
+        }
+    }
+}
+
+impl PartialOrd for Object {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl From<Tree> for Object {
+    fn from(tree: Tree) -> Self {
+        Self::Tree(tree)
+    }
+}
+
+impl From<Blob> for Object {
+    fn from(blob: Blob) -> Self {
+        Self::Blob(blob)
+    }
+}
+
+// impl From<Link> for Object {
+//     fn from(link: Link) -> Self {
+//         Self::Link(link)
+//     }
+// }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ObjectExt {
-    pub links: HashSet<PathBuf>,
-    pub package_id: ObjectId,
+    pub links: HashMap<PackageId, Link>,
+    pub package_id: PackageId,
 }
 
 impl ObjectExt {
-    pub fn new(package_id: ObjectId) -> Self {
+    pub fn new(package_id: PackageId) -> Self {
         Self {
-            links: HashSet::new(),
+            links: HashMap::new(),
             package_id,
         }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
-pub struct ObjectId([u8; 32]);
-
-impl ObjectId {
-    pub fn as_bytes(&self) -> &[u8] {
-        &self.0
-    }
-
-    pub fn truncate(&self) -> u64 {
-        let mut res: [u8; 8] = Default::default();
-        res.copy_from_slice(&self.0[0..8]);
-        u64::from_be_bytes(res)
-    }
-}
-
-impl fmt::Display for ObjectId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for byte in &self.0 {
-            write!(f, "{:02x}", byte)?;
-        }
-        Ok(())
-    }
-}
-
-impl fmt::Debug for ObjectId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for byte in &self.0 {
-            write!(f, "{:02x}", byte)?;
-        }
-        Ok(())
-    }
-}
-
-impl From<[u8; 32]> for ObjectId {
-    fn from(hash: [u8; 32]) -> Self {
-        ObjectId(hash)
-    }
-}
-
-impl From<ObjectId> for Vec<u8> {
-    fn from(id: ObjectId) -> Self {
-        id.0.to_vec()
-    }
-}
-
-impl TryFrom<Vec<u8>> for ObjectId {
-    type Error = Vec<u8>;
-
-    fn try_from(vec: Vec<u8>) -> Result<Self, Self::Error> {
-        let hash = <[u8; 32]>::try_from(vec)?;
-        Ok(ObjectId(hash))
     }
 }
 
@@ -162,12 +219,20 @@ impl Objects {
         self.extensions.get_mut(id)
     }
 
+    pub unsafe fn get_ext_mut_unchecked(&mut self, id: &ObjectId) -> &mut ObjectExt {
+        self.get_ext_mut(id).unwrap_unchecked()
+    }
+
     pub fn get(&self, id: &ObjectId) -> Option<&Object> {
         self.nodes.get(id)
     }
 
     pub fn get_mut(&mut self, id: &ObjectId) -> Option<&mut Object> {
         self.nodes.get_mut(id)
+    }
+
+    pub unsafe fn get_unchecked(&self, id: &ObjectId) -> &Object {
+        self.get(id).unwrap_unchecked()
     }
 
     pub fn get_full(&self, id: &ObjectId) -> Option<(&Object, &ObjectExt)> {
@@ -178,18 +243,58 @@ impl Objects {
         }
     }
 
-    pub fn insert_link(&mut self, id: &ObjectId, link: PathBuf) -> bool {
-        if let Some(ext) = self.extensions.get_mut(id) {
-            ext.links.insert(link);
-            true
+    pub fn get_full_mut(&mut self, id: &ObjectId) -> Option<(&mut Object, &mut ObjectExt)> {
+        if let Some(object) = self.nodes.get_mut(id) {
+            self.extensions.get_mut(id).map(|ext| (object, ext))
         } else {
-            false
+            None
         }
     }
 
+    pub fn get_children<'a>(
+        &'a self,
+        package_id: &'a PackageId,
+    ) -> impl Iterator<Item = &ObjectId> + 'a {
+        self.extensions.iter().filter_map(|(id, ext)| {
+            if ext.package_id == *package_id || ext.links.contains_key(package_id) {
+                Some(id)
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn read_children<'a, P, R>(
+        &'a self,
+        package_id: &'a PackageId,
+        predicate: P,
+    ) -> impl Iterator<Item = R> + 'a
+    where
+        P: Fn(&Object) -> R + 'a,
+    {
+        self.get_children(package_id).map(move |id| {
+            let object = unsafe { self.get_unchecked(id) };
+            predicate(object)
+        })
+    }
+
+    // pub fn insert_link(
+    //     &mut self,
+    //     src_object: &ObjectId,
+    //     target_package: PackageId,
+    //     link: PathBuf,
+    // ) -> bool {
+    //     if let Some(ext) = self.extensions.get_mut(src_object) {
+    //         ext.links.insert(target_package, link);
+    //         true
+    //     } else {
+    //         false
+    //     }
+    // }
+
     pub fn insert(
         &mut self,
-        package_id: ObjectId,
+        package_id: PackageId,
         object_id: ObjectId,
         object: Object,
     ) -> Option<Object> {
@@ -201,4 +306,29 @@ impl Objects {
             None
         }
     }
+
+    // pub fn remove_tree_children_links(
+    //     &mut self,
+    //     tree_id: &ObjectId,
+    //     target_package: &PackageId,
+    // ) -> Option<Vec<PathBuf>> {
+    //     let children = match self.nodes.get(tree_id) {
+    //         Some(Object::Tree { path: _, children }) => Some(children),
+    //         _ => None,
+    //     };
+
+    //     let mut result = Vec::new();
+
+    //     if let Some(children) = children {
+    //         for child in children {
+    //             let ext = unsafe { self.extensions.get_mut(&child).unwrap_unchecked() };
+    //             if let Some(link) = ext.links.remove(target_package) {
+    //                 result.push(link);
+    //             }
+    //         }
+    //         Some(result)
+    //     } else {
+    //         None
+    //     }
+    // }
 }

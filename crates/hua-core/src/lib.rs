@@ -1,6 +1,7 @@
 #![feature(let_chains)]
 #![feature(slice_pattern)]
 #![feature(assert_matches)]
+#![feature(vec_retain_mut)]
 
 // mod cache;
 pub mod dependency;

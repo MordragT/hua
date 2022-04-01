@@ -2,14 +2,14 @@ use semver::Version;
 use serde::{Deserialize, Serialize};
 
 use crate::extra::hash::PackageHash;
-use crate::store::{Object, ObjectId};
+use crate::store::ObjectId;
 use crate::Requirement;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use super::Blob;
+use super::{Blob, PackageId, Tree};
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
 pub struct PackageDesc {
@@ -43,11 +43,7 @@ impl PackageDesc {
 
 impl From<Package> for PackageDesc {
     fn from(package: Package) -> Self {
-        let blobs = package
-            .provides
-            .into_iter()
-            .filter_map(|(_id, obj)| Object::into_blob(obj))
-            .collect();
+        let blobs = package.blobs.into_iter().map(|(_id, blob)| blob).collect();
 
         Self {
             name: package.name,
@@ -60,53 +56,56 @@ impl From<Package> for PackageDesc {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Package {
-    pub id: ObjectId,
+    pub id: PackageId,
     pub name: String,
     pub version: Version,
-    pub provides: HashMap<ObjectId, Object>,
+    pub trees: BTreeMap<ObjectId, Tree>,
+    pub blobs: BTreeMap<ObjectId, Blob>,
     pub requires: HashSet<Requirement>,
 }
 
 impl Package {
     /// Creates a new package
     pub fn new(
-        id: ObjectId,
+        id: PackageId,
         name: &str,
         version: Version,
-        provides: HashMap<ObjectId, Object>,
+        trees: BTreeMap<ObjectId, Tree>,
+        blobs: BTreeMap<ObjectId, Blob>,
         requires: HashSet<Requirement>,
     ) -> Self {
         Self {
             id,
             name: name.to_owned(),
             version,
-            provides,
+            trees,
+            blobs,
             requires,
         }
     }
 
-    pub fn id(&self) -> ObjectId {
-        self.id
-    }
+    // pub fn id(&self) -> PackageId {
+    //     self.id
+    // }
 
-    pub fn name(&self) -> &String {
-        &self.name
-    }
+    // pub fn name(&self) -> &String {
+    //     &self.name
+    // }
 
-    pub fn version(&self) -> &Version {
-        &self.version
-    }
+    // pub fn version(&self) -> &Version {
+    //     &self.version
+    // }
 
-    pub fn provides(&self) -> &HashMap<ObjectId, Object> {
-        &self.provides
-    }
-
-    pub fn requires(&self) -> &HashSet<Requirement> {
-        &self.requires
-    }
+    // pub fn requires(&self) -> &HashSet<Requirement> {
+    //     &self.requires
+    // }
 
     pub fn verify<P: AsRef<Path>>(&self, path: P) -> io::Result<bool> {
-        let PackageHash { root, children: _ } = PackageHash::from_path(path, &self.name)?;
+        let PackageHash {
+            root,
+            trees: _,
+            blobs: _,
+        } = PackageHash::from_path(path, &self.name)?;
 
         Ok(self.id == root)
     }
@@ -125,7 +124,7 @@ impl fmt::Display for Package {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Packages {
-    nodes: HashMap<ObjectId, PackageDesc>,
+    nodes: HashMap<PackageId, PackageDesc>,
 }
 
 impl Packages {
@@ -137,26 +136,26 @@ impl Packages {
         self.nodes.contains_key(&package.id)
     }
 
-    pub fn contains(&self, id: &ObjectId) -> bool {
+    pub fn contains(&self, id: &PackageId) -> bool {
         self.nodes.contains_key(id)
     }
 
-    pub fn insert(&mut self, id: ObjectId, desc: PackageDesc) -> Option<PackageDesc> {
+    pub fn insert(&mut self, id: PackageId, desc: PackageDesc) -> Option<PackageDesc> {
         self.nodes.insert(id, desc)
     }
 
-    pub fn get(&self, id: &ObjectId) -> Option<&PackageDesc> {
+    pub fn get(&self, id: &PackageId) -> Option<&PackageDesc> {
         self.nodes.get(id)
     }
 
-    pub unsafe fn get_unchecked(&self, id: &ObjectId) -> &PackageDesc {
+    pub unsafe fn get_unchecked(&self, id: &PackageId) -> &PackageDesc {
         self.nodes.get(id).unwrap_unchecked()
     }
 
     pub fn matches<'a>(
         &'a self,
         requirement: &'a Requirement,
-    ) -> impl Iterator<Item = (&ObjectId, &'a PackageDesc)> {
+    ) -> impl Iterator<Item = (&PackageId, &'a PackageDesc)> {
         self.nodes.iter().filter_map(|(id, desc)| {
             if desc.matches(requirement) {
                 Some((id, desc))
@@ -166,7 +165,7 @@ impl Packages {
         })
     }
 
-    pub fn path_in_store<P: AsRef<Path>>(&self, id: &ObjectId, store_path: P) -> Option<PathBuf> {
+    pub fn path_in_store<P: AsRef<Path>>(&self, id: &PackageId, store_path: P) -> Option<PathBuf> {
         if let Some(desc) = self.get(id) {
             let name_version_id = format!("{}-{}-{}", desc.name, desc.version, id);
             Some(store_path.as_ref().join(name_version_id))
@@ -178,24 +177,24 @@ impl Packages {
     pub fn filter<P: Fn(&PackageDesc) -> bool>(
         &self,
         predicate: P,
-    ) -> impl Iterator<Item = (&ObjectId, &PackageDesc)> {
+    ) -> impl Iterator<Item = (&PackageId, &PackageDesc)> {
         self.nodes
             .iter()
             .filter(move |(_id, desc)| predicate(*desc))
     }
 
-    pub fn find_by_name_starting_with(&self, name: &str) -> Option<(&ObjectId, &PackageDesc)> {
+    pub fn find_by_name_starting_with(&self, name: &str) -> Option<(&PackageId, &PackageDesc)> {
         self.find(|p| p.name.starts_with(name))
     }
 
-    pub fn find_by_name(&self, name: &str) -> Option<(&ObjectId, &PackageDesc)> {
+    pub fn find_by_name(&self, name: &str) -> Option<(&PackageId, &PackageDesc)> {
         self.find(|p| p.name == name)
     }
 
     pub fn find<P: Fn(&PackageDesc) -> bool>(
         &self,
         predicate: P,
-    ) -> Option<(&ObjectId, &PackageDesc)> {
+    ) -> Option<(&PackageId, &PackageDesc)> {
         self.nodes.iter().find(move |(_id, desc)| predicate(*desc))
     }
 }

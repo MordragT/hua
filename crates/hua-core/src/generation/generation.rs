@@ -1,5 +1,5 @@
-use crate::extra::path::ComponentPaths;
-use crate::store::ObjectId;
+use crate::extra::path::ComponentPathBuf;
+use crate::store::PackageId;
 use crate::Requirement;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -14,9 +14,9 @@ use std::{
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Generation {
     path: PathBuf,
-    packages: HashSet<ObjectId>,
+    packages: HashSet<PackageId>,
     requirements: HashSet<Requirement>,
-    component_paths: ComponentPaths,
+    component_paths: ComponentPathBuf,
 }
 
 impl fmt::Display for Generation {
@@ -32,9 +32,9 @@ impl fmt::Display for Generation {
 impl Generation {
     pub fn new(
         path: PathBuf,
-        packages: HashSet<ObjectId>,
+        packages: HashSet<PackageId>,
         requirements: HashSet<Requirement>,
-        component_paths: ComponentPaths,
+        component_paths: ComponentPathBuf,
     ) -> Self {
         Self {
             path,
@@ -48,11 +48,11 @@ impl Generation {
         println!("{:#?}", self.packages);
     }
 
-    pub fn packages(&self) -> &HashSet<ObjectId> {
+    pub fn packages(&self) -> &HashSet<PackageId> {
         &self.packages
     }
 
-    pub fn contains(&self, id: &ObjectId) -> bool {
+    pub fn contains(&self, id: &PackageId) -> bool {
         self.packages.contains(id)
     }
 
@@ -60,7 +60,7 @@ impl Generation {
         &self.path
     }
 
-    pub fn component_paths(&self) -> &ComponentPaths {
+    pub fn component_paths(&self) -> &ComponentPathBuf {
         &self.component_paths
     }
 

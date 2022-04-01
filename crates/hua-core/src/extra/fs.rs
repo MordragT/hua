@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::path::ComponentPaths;
+use super::path::ComponentPathBuf;
 
 // TODO: better naming
 // TODO: tests
@@ -131,8 +131,8 @@ pub fn link_to<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<HashSet
 /// Creates the directories of the destination if they do not exist
 /// Returns a list of all links created
 pub fn link_component_paths(
-    from: &ComponentPaths,
-    to: &ComponentPaths,
+    from: &ComponentPathBuf,
+    to: &ComponentPathBuf,
 ) -> Result<HashSet<PathBuf>> {
     to.create_dirs()?;
     let mut collector = HashSet::new();

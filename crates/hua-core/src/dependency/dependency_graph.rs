@@ -1,5 +1,5 @@
 use crate::{
-    store::{Backend, Blob, ObjectId, PackageDesc},
+    store::{Backend, Blob, PackageDesc, PackageId},
     Store,
 };
 use daggy::{Dag, NodeIndex};
@@ -13,7 +13,7 @@ pub struct DependencyGraph<'a> {
     names: HashSet<&'a String>,
     objects: HashSet<&'a Blob>,
     visited: HashMap<&'a Requirement, NodeIndex<usize>>,
-    inserted: HashMap<ObjectId, NodeIndex<usize>>,
+    inserted: HashMap<PackageId, NodeIndex<usize>>,
 }
 
 // TODO add resolve_packages function that resolves the graph
@@ -40,7 +40,7 @@ impl<'a> DependencyGraph<'a> {
         let options = store
             .packages()
             .matches(req)
-            .collect::<HashMap<&ObjectId, &PackageDesc>>();
+            .collect::<HashMap<&PackageId, &PackageDesc>>();
 
         let node = match options.len() {
             0 => self.relations.add_node(Step::Unresolved(req)),
@@ -98,7 +98,7 @@ impl<'a> DependencyGraph<'a> {
                             None
                         }
                     })
-                    .collect::<HashMap<ObjectId, NodeIndex<usize>>>();
+                    .collect::<HashMap<PackageId, NodeIndex<usize>>>();
 
                 match inserted_options.len() {
                     0 => self.resolve_req(req, store, choices)?,
@@ -180,7 +180,7 @@ impl<'a> DependencyGraph<'a> {
         &mut self,
         requirements: impl IntoIterator<Item = &'a Requirement>,
         store: &'a Store<B>,
-    ) -> DependencyResult<impl Iterator<Item = ObjectId> + '_> {
+    ) -> DependencyResult<impl Iterator<Item = PackageId> + '_> {
         let mut choices = HashMap::new();
 
         let _nodes = self.resolve_reqs(requirements, store, &mut choices)?;

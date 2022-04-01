@@ -19,14 +19,14 @@ pub fn relative_path_between<P: AsRef<Path>, Q: AsRef<Path>>(
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct ComponentPaths {
+pub struct ComponentPathBuf {
     pub binary: PathBuf,
     pub config: PathBuf,
     pub library: PathBuf,
     pub share: PathBuf,
 }
 
-impl ComponentPaths {
+impl ComponentPathBuf {
     pub fn from_path<P: AsRef<Path>>(path: P) -> Self {
         let path = path.as_ref();
         Self {

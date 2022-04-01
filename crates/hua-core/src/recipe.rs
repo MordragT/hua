@@ -8,7 +8,7 @@ use semver::{Version, VersionReq};
 
 use crate::{
     error::Result,
-    extra::{path::ComponentPaths, Source},
+    extra::{path::ComponentPathBuf, Source},
     store::{Backend, Blob},
     Downloader, Requirement, Store, UserManager,
 };
@@ -122,7 +122,7 @@ impl Recipe {
     pub fn link_dependencies<B: Backend>(
         mut self,
         store: &mut Store<B>,
-        global_paths: &ComponentPaths,
+        global_paths: &ComponentPathBuf,
     ) -> Result<Self> {
         todo!()
     }

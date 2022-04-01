@@ -2,11 +2,13 @@ use snafu::prelude::*;
 use std::path::PathBuf;
 
 pub use backend::{Backend, LocalBackend};
+pub use id::*;
 pub use object::*;
 pub use package::*;
 pub use store::Store;
 
 mod backend;
+mod id;
 mod object;
 mod package;
 mod store;
@@ -25,10 +27,22 @@ pub enum StoreError {
     NotExisting { path: PathBuf },
     #[snafu(display("IoError: {source}"))]
     IoError { source: std::io::Error },
+    #[snafu(display("Waldir Error: {source}"))]
+    WalkDirError { source: walkdir::Error },
     #[snafu(display("Package could not be verified: {package}"))]
     PackageNotVerified { package: Package },
     #[snafu(display("Packge could not be found for {id}"))]
-    PackageNotFoundById { id: ObjectId },
+    PackageNotFoundById { id: PackageId },
+    #[snafu(display("Object vould not be found for {id}"))]
+    ObjectNotFoundById { id: ObjectId },
+    #[snafu(display("A path or file name might have been invalid Utf-8"))]
+    InvalidUtf8,
+    #[snafu(display("StripPrefixError: {source}"))]
+    StripPrefixError { source: std::path::StripPrefixError },
+    #[snafu(display(
+        "The following path cannot be linked, it must be in bin, lib, cfg or share: {path:#?}"
+    ))]
+    UnsupportedFilePath { path: PathBuf },
 }
 
 type StoreResult<T> = std::result::Result<T, StoreError>;

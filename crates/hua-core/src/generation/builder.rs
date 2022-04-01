@@ -1,6 +1,6 @@
 use super::*;
-use crate::extra::path::ComponentPaths;
-use crate::store::{Backend, ObjectId};
+use crate::extra::path::ComponentPathBuf;
+use crate::store::{Backend, PackageId};
 use crate::Store;
 use crate::{DependencyGraph, Requirement};
 use std::collections::HashSet;
@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 pub struct GenerationBuilder {
     id: usize,
     requirements: Option<HashSet<Requirement>>,
-    packages: Option<HashSet<ObjectId>>,
+    packages: Option<HashSet<PackageId>>,
     base: Option<PathBuf>,
 }
 
@@ -70,7 +70,7 @@ impl GenerationBuilder {
             return Err(GenerationError::AlreadyPresent { id: self.id });
         }
         fs::create_dir(&path).context(GenerationIoSnafu { id: self.id })?;
-        let component_paths = ComponentPaths::new(
+        let component_paths = ComponentPathBuf::new(
             path.join("bin"),
             path.join("cfg"),
             path.join("lib"),
@@ -102,7 +102,7 @@ impl GenerationBuilder {
             return Err(GenerationError::AlreadyPresent { id: self.id });
         }
         fs::create_dir(&path).context(GenerationIoSnafu { id: self.id })?;
-        let component_paths = ComponentPaths::new(
+        let component_paths = ComponentPathBuf::new(
             path.join("bin"),
             path.join("cfg"),
             path.join("lib"),

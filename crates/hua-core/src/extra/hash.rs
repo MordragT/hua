@@ -1,20 +1,20 @@
 use super::path;
 use rs_merkle::{Hasher, MerkleTree};
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     fs::File,
     io::{self, Read},
     path::Path,
 };
 use walkdir::WalkDir;
 
-use crate::store::{Blob, Object, ObjectId};
+use crate::store::{Blob, ObjectId, PackageId, RawId, Tree};
 
 #[derive(Clone)]
 pub struct Blake3;
 
 impl Hasher for Blake3 {
-    type Hash = ObjectId;
+    type Hash = RawId;
 
     fn hash(data: &[u8]) -> Self::Hash {
         let mut hasher = blake3::Hasher::new();
@@ -47,15 +47,19 @@ impl Hasher for Blake3 {
 
 #[derive(Debug)]
 pub struct PackageHash {
-    pub root: ObjectId,
-    pub children: HashMap<ObjectId, Object>,
+    pub root: PackageId,
+    pub trees: BTreeMap<ObjectId, Tree>,
+    pub blobs: BTreeMap<ObjectId, Blob>,
 }
 
 impl PackageHash {
     pub fn from_path<P: AsRef<Path>>(path: P, package_name: &str) -> io::Result<Self> {
-        let mut children = HashMap::new();
+        // let mut children = BTreeMap::new();
+        let mut trees = BTreeMap::new();
+        let mut blobs = BTreeMap::new();
+
         let mut tree = MerkleTree::<Blake3>::new();
-        let mut dir_children = Vec::new();
+        let mut dir_children: Vec<RawId> = Vec::new();
 
         let root_path = path.as_ref();
 
@@ -69,8 +73,9 @@ impl PackageHash {
                 tree.commit();
 
                 return Ok(Self {
-                    root: unsafe { tree.root().unwrap_unchecked() },
-                    children,
+                    root: unsafe { tree.root().unwrap_unchecked() }.into(),
+                    trees,
+                    blobs,
                 });
             } else if path.is_file() {
                 let name = path.file_name().unwrap().to_str().unwrap();
@@ -85,7 +90,7 @@ impl PackageHash {
                 dir_children.push(hash);
 
                 let path = path::relative_path_between(root_path, path)?;
-                children.insert(hash, Object::Blob(Blob { path }));
+                blobs.insert(hash.into(), Blob::new(path));
             } else if path.is_dir() {
                 let name = path.file_name().unwrap().to_str().unwrap();
 
@@ -98,19 +103,25 @@ impl PackageHash {
                 let root = {
                     // Calculate root from another tree so that subelemnts of parallel directories
                     // are not included
+                    // Use partial trees
                     let mut tree = MerkleTree::<Blake3>::from_leaves(&inner_children);
                     tree.insert(hash);
                     tree.commit();
                     unsafe { tree.root().unwrap_unchecked() }
                 };
 
-                children.insert(
-                    root,
-                    Object::Tree {
+                trees.insert(
+                    root.into(),
+                    Tree::new(
                         path,
-                        children: inner_children,
-                    },
+                        inner_children
+                            .into_iter()
+                            .map(Into::into)
+                            .collect::<Vec<ObjectId>>(),
+                    ),
                 );
+            } else if path.is_symlink() {
+                todo!()
             }
         }
         unreachable!()

@@ -28,13 +28,14 @@ pub fn pkg_req_ver_prov<P: AsRef<Path>>(
 
     let _lib = File::create(&lib_path).unwrap();
 
-    let PackageHash { root, children } = PackageHash::from_path(path, name).unwrap();
+    let PackageHash { root, trees, blobs } = PackageHash::from_path(path, name).unwrap();
 
     Package::new(
         root,
         name,
         Version::parse(version).unwrap(),
-        children,
+        trees,
+        blobs,
         requires.into_iter().collect(),
     )
 }
