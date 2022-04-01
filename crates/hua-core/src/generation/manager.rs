@@ -1,5 +1,7 @@
 use super::*;
-use crate::{components::ComponentPaths, Store};
+use crate::extra::path::ComponentPaths;
+use crate::store::{Backend, ObjectId};
+use crate::Store;
 use crate::{extra, Generation, GenerationBuilder, Requirement};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -82,10 +84,10 @@ impl GenerationManager {
         }
     }
 
-    pub fn insert_requirement(
+    pub fn insert_requirement<B: Backend>(
         &mut self,
         requirement: Requirement,
-        store: &Store,
+        store: &Store<B>,
     ) -> GenerationResult<bool> {
         if self.get_current().contains_requirement(&requirement) {
             Ok(false)
@@ -109,10 +111,10 @@ impl GenerationManager {
         }
     }
 
-    pub fn remove_requirement(
+    pub fn remove_requirement<B: Backend>(
         &mut self,
         requirement: &Requirement,
-        store: &Store,
+        store: &Store<B>,
     ) -> GenerationResult<bool> {
         if self.get_current().contains_requirement(requirement) {
             self.counter += 1;
@@ -136,14 +138,14 @@ impl GenerationManager {
         }
     }
 
-    pub fn packages(&self) -> impl Iterator<Item = &usize> {
+    pub fn packages(&self) -> impl Iterator<Item = &ObjectId> {
         self.list
             .iter()
             .flat_map(|(_id, gen)| gen.packages().iter())
     }
 
-    pub fn contains_package(&self, index: usize) -> bool {
-        self.packages().find(|idx| **idx == index).is_some()
+    pub fn contains_package(&self, id: &ObjectId) -> bool {
+        self.packages().find(|idx| *idx == id).is_some()
     }
 
     pub fn list_current_packages(&self) {

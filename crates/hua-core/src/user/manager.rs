@@ -1,6 +1,8 @@
+use crate::extra::path::ComponentPaths;
+use crate::extra::persist::Pot;
 use crate::generation::GenerationManager;
-use crate::persist::Pot;
-use crate::{components::ComponentPaths, Store};
+use crate::store::{Backend, ObjectId};
+use crate::Store;
 use crate::{Requirement, User};
 use rustbreak::PathDatabase;
 use serde::{Deserialize, Serialize};
@@ -109,10 +111,10 @@ impl UserManager {
     /// If the requirement was not fullfilled, a try to get a matching package from the store is started.
     /// If the package could be retrieved a new generation is created and true is returned.
     /// If it fullfilled false is returned
-    pub fn insert_requirement(
+    pub fn insert_requirement<B: Backend>(
         &mut self,
         requirement: Requirement,
-        store: &Store,
+        store: &Store<B>,
     ) -> UserResult<bool> {
         Ok(self
             .current_generation_manager_mut()
@@ -123,10 +125,10 @@ impl UserManager {
     /// Remove a package from the current user.
     /// If the package was present return true and create a new generation without the package.
     /// If it was not present false is returned.
-    pub fn remove_requirement(
+    pub fn remove_requirement<B: Backend>(
         &mut self,
         requirement: &Requirement,
-        store: &Store,
+        store: &Store<B>,
     ) -> UserResult<bool> {
         Ok(self
             .current_generation_manager_mut()
@@ -161,7 +163,7 @@ impl UserManager {
         self.current_generation_manager().list_generations();
     }
 
-    pub fn package_indices(&self) -> impl Iterator<Item = &usize> {
+    pub fn package_indices(&self) -> impl Iterator<Item = &ObjectId> {
         self.users
             .list
             .iter()
@@ -170,8 +172,8 @@ impl UserManager {
     }
 
     /// Checks wether the package is stored inside any generation of all users.
-    pub fn contains_package_index(&self, index: usize) -> bool {
-        self.package_indices().find(|idx| **idx == index).is_some()
+    pub fn contains_package_index(&self, index: &ObjectId) -> bool {
+        self.package_indices().find(|idx| *idx == index).is_some()
     }
 
     /// Returns the path of the user manager
@@ -196,7 +198,8 @@ impl UserManager {
 mod tests {
     use super::UserManager;
     use super::USERS_DB;
-    use crate::components::ComponentPaths;
+    use crate::extra::path::ComponentPaths;
+    use crate::store::LocalBackend;
     use crate::user::UserError;
     use crate::{support::*, Store};
     use std::assert_matches::assert_matches;
@@ -245,7 +248,7 @@ mod tests {
         let mut user_manager = UserManager::create_at_path(path).unwrap();
 
         let store_path = temp_dir.child("store");
-        let mut store = Store::create_at_path(&store_path).unwrap();
+        let mut store = Store::<LocalBackend>::init(&store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
@@ -265,7 +268,7 @@ mod tests {
         let mut user_manager = UserManager::create_at_path(path).unwrap();
 
         let store_path = temp_dir.child("store");
-        let mut store = Store::create_at_path(&store_path).unwrap();
+        let mut store = Store::<LocalBackend>::init(&store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
@@ -288,7 +291,7 @@ mod tests {
         let mut user_manager = UserManager::create_at_path(path).unwrap();
 
         let store_path = temp_dir.child("store");
-        let store = Store::create_at_path(&store_path).unwrap();
+        let store = Store::<LocalBackend>::init(&store_path).unwrap();
 
         let req = req("one", ">0.0.1");
         let res = user_manager.insert_requirement(req, &store).unwrap_err();
@@ -304,7 +307,7 @@ mod tests {
         let mut user_manager = UserManager::create_at_path(path).unwrap();
 
         let store_path = temp_dir.child("store");
-        let mut store = Store::create_at_path(&store_path).unwrap();
+        let mut store = Store::<LocalBackend>::init(&store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
@@ -327,7 +330,7 @@ mod tests {
         let mut user_manager = UserManager::create_at_path(path).unwrap();
 
         let store_path = temp_dir.child("store");
-        let store = Store::create_at_path(&store_path).unwrap();
+        let store = Store::<LocalBackend>::init(&store_path).unwrap();
 
         let req = req("one", ">0.0.1");
         let res = user_manager.remove_requirement(&req, &store).unwrap();
@@ -343,7 +346,7 @@ mod tests {
         let mut user_manager = UserManager::create_at_path(path).unwrap();
 
         let store_path = temp_dir.child("store");
-        let mut store = Store::create_at_path(&store_path).unwrap();
+        let mut store = Store::<LocalBackend>::init(&store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
@@ -385,7 +388,7 @@ mod tests {
         let mut user_manager = UserManager::create_at_path(path).unwrap();
 
         let store_path = temp_dir.child("store");
-        let mut store = Store::create_at_path(&store_path).unwrap();
+        let mut store = Store::<LocalBackend>::init(&store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
@@ -414,7 +417,7 @@ mod tests {
         let path = temp_dir.child("user");
         let user_manager = UserManager::create_at_path(path).unwrap();
 
-        let res = user_manager.contains_package_index(1092410241241240);
+        let res = user_manager.contains_package_index(&[1_u8; 32].into());
 
         assert!(!res);
     }
@@ -427,16 +430,17 @@ mod tests {
         let mut user_manager = UserManager::create_at_path(path).unwrap();
 
         let store_path = temp_dir.child("store");
-        let mut store = Store::create_at_path(&store_path).unwrap();
+        let mut store = Store::<LocalBackend>::init(&store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
-        let index = store.insert(one, one_path).unwrap();
+        let id = one.id();
+        let _ = store.insert(one, one_path).unwrap();
 
         let req = req("one", ">0.0.1");
         let _ = user_manager.insert_requirement(req, &store).unwrap();
 
-        let res = user_manager.contains_package_index(index);
+        let res = user_manager.contains_package_index(&id);
 
         assert!(res);
     }

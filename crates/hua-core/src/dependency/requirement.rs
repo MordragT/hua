@@ -2,21 +2,24 @@ use semver::VersionReq;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fmt, fmt::Debug, hash::Hash};
 
-use crate::Component;
+use crate::{
+    extra,
+    store::{Blob, PackageDesc},
+};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
 pub struct Requirement {
     name: String,
     version_req: VersionReq,
-    components: BTreeSet<Component>,
+    blobs: BTreeSet<Blob>,
 }
 
 impl Requirement {
-    pub fn new(name: String, version_req: VersionReq, components: BTreeSet<Component>) -> Self {
+    pub fn new(name: String, version_req: VersionReq, objects: BTreeSet<Blob>) -> Self {
         Self {
             name,
             version_req,
-            components,
+            blobs: objects,
         }
     }
 
@@ -26,8 +29,8 @@ impl Requirement {
     pub fn version_req(&self) -> &VersionReq {
         &self.version_req
     }
-    pub fn components(&self) -> &BTreeSet<Component> {
-        &self.components
+    pub fn blobs(&self) -> &BTreeSet<Blob> {
+        &self.blobs
     }
 }
 
@@ -37,7 +40,7 @@ impl Ord for Requirement {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.name
             .cmp(other.name())
-            .then(self.components.cmp(other.components()))
+            .then(self.blobs.cmp(other.blobs()))
     }
 }
 
@@ -51,7 +54,17 @@ impl fmt::Display for Requirement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&format!(
             "Dependency {}:\nversion_req: {}\ncomponents: {:#?}\n",
-            self.name, self.version_req, self.components
+            self.name, self.version_req, self.blobs
         ))
+    }
+}
+
+impl From<PackageDesc> for Requirement {
+    fn from(desc: PackageDesc) -> Self {
+        Self::new(
+            desc.name,
+            extra::exact_version_req(desc.version),
+            desc.blobs,
+        )
     }
 }

@@ -1,4 +1,8 @@
-use crate::{Component, Package, Requirement};
+use crate::{
+    extra::hash::PackageHash,
+    store::{Blob, PackageDesc},
+    Package, Requirement,
+};
 use relative_path::RelativePathBuf;
 use semver::{Version, VersionReq};
 use std::{
@@ -23,15 +27,14 @@ pub fn pkg_req_ver_prov<P: AsRef<Path>>(
     let lib_path = package_lib_path.join(&lib_name);
 
     let _lib = File::create(&lib_path).unwrap();
-    let mut provides = BTreeSet::new();
-    provides.insert(Component::Library(RelativePathBuf::from(&format!(
-        "lib/{lib_name}"
-    ))));
+
+    let PackageHash { root, children } = PackageHash::from_path(path, name).unwrap();
 
     Package::new(
+        root,
         name,
         Version::parse(version).unwrap(),
-        provides.into_iter().collect(),
+        children,
         requires.into_iter().collect(),
     )
 }
@@ -62,7 +65,8 @@ pub fn pkg_ver<P: AsRef<Path>>(name: &str, path: P, version: &str) -> Package {
 
 #[allow(dead_code)]
 pub fn to_req(package: &Package) -> Requirement {
-    package.clone().into_requirement()
+    let desc: PackageDesc = package.clone().into();
+    desc.into()
 }
 
 #[allow(dead_code)]
@@ -70,9 +74,9 @@ pub fn req(name: &str, version_req: &str) -> Requirement {
     req_comp(
         name,
         version_req,
-        [Component::Library(RelativePathBuf::from(&format!(
-            "lib/{name}.so"
-        )))],
+        [Blob {
+            path: RelativePathBuf::from(&format!("lib/{name}.so")),
+        }],
     )
 }
 
@@ -80,11 +84,11 @@ pub fn req(name: &str, version_req: &str) -> Requirement {
 pub fn req_comp(
     name: &str,
     version_req: &str,
-    components: impl IntoIterator<Item = Component>,
+    objects: impl IntoIterator<Item = Blob>,
 ) -> Requirement {
     Requirement::new(
         name.to_owned(),
         VersionReq::parse(version_req).unwrap(),
-        components.into_iter().collect(),
+        objects.into_iter().collect(),
     )
 }

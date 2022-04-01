@@ -1,5 +1,7 @@
 use super::*;
-use crate::{ComponentPaths, Store};
+use crate::extra::path::ComponentPaths;
+use crate::store::{Backend, ObjectId};
+use crate::Store;
 use crate::{DependencyGraph, Requirement};
 use std::collections::HashSet;
 use std::fs;
@@ -11,7 +13,7 @@ use std::path::{Path, PathBuf};
 pub struct GenerationBuilder {
     id: usize,
     requirements: Option<HashSet<Requirement>>,
-    packages: Option<HashSet<usize>>,
+    packages: Option<HashSet<ObjectId>>,
     base: Option<PathBuf>,
 }
 
@@ -35,7 +37,7 @@ impl GenerationBuilder {
         self
     }
 
-    pub fn resolve(mut self, store: &Store) -> GenerationResult<Self> {
+    pub fn resolve<B: Backend>(mut self, store: &Store<B>) -> GenerationResult<Self> {
         if let Some(reqs) = &self.requirements {
             let mut graph = DependencyGraph::new();
             let packages = graph
@@ -50,7 +52,7 @@ impl GenerationBuilder {
         }
     }
 
-    pub fn build(self, store: &Store) -> GenerationResult<Generation> {
+    pub fn build<B: Backend>(self, store: &Store<B>) -> GenerationResult<Generation> {
         let base = self
             .base
             .ok_or(GenerationError::MissingBasePath { id: self.id })?;
@@ -78,7 +80,9 @@ impl GenerationBuilder {
             .create_dirs()
             .context(GenerationIoSnafu { id: self.id })?;
 
-        store.link_packages(&packages, &component_paths);
+        store
+            .link_packages(&packages, &component_paths)
+            .context(StoreSnafu)?;
 
         Ok(Generation::new(
             path,

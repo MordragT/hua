@@ -1,4 +1,5 @@
-use crate::components::ComponentPaths;
+use crate::extra::path::ComponentPaths;
+use crate::store::ObjectId;
 use crate::Requirement;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -7,10 +8,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
+// TODO: Instead of storing the requirements as Requirement, store them as packages,
+// so that upgrading can be provided
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Generation {
     path: PathBuf,
-    packages: HashSet<usize>,
+    packages: HashSet<ObjectId>,
     requirements: HashSet<Requirement>,
     component_paths: ComponentPaths,
 }
@@ -28,7 +32,7 @@ impl fmt::Display for Generation {
 impl Generation {
     pub fn new(
         path: PathBuf,
-        packages: HashSet<usize>,
+        packages: HashSet<ObjectId>,
         requirements: HashSet<Requirement>,
         component_paths: ComponentPaths,
     ) -> Self {
@@ -44,12 +48,12 @@ impl Generation {
         println!("{:#?}", self.packages);
     }
 
-    pub fn packages(&self) -> &HashSet<usize> {
+    pub fn packages(&self) -> &HashSet<ObjectId> {
         &self.packages
     }
 
-    pub fn contains(&self, index: &usize) -> bool {
-        self.packages.contains(index)
+    pub fn contains(&self, id: &ObjectId) -> bool {
+        self.packages.contains(id)
     }
 
     pub fn path(&self) -> &Path {

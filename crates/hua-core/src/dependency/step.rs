@@ -1,24 +1,24 @@
-use crate::{Package, Requirement};
+use crate::{store::ObjectId, Requirement};
 use std::{collections::HashSet, fmt::Debug, hint::unreachable_unchecked};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Step<'a> {
-    Resolved(usize),
-    Choice(HashSet<&'a Package>),
+    Resolved(ObjectId),
+    Choice(HashSet<ObjectId>),
     Unresolved(&'a Requirement),
 }
 
 impl<'a> Step<'a> {
-    pub unsafe fn as_choice_unchecked(&self) -> &HashSet<&'a Package> {
+    pub unsafe fn as_choice_unchecked(&self) -> &HashSet<ObjectId> {
         match &self {
             Self::Choice(set) => set,
             _ => unreachable_unchecked(),
         }
     }
 
-    pub unsafe fn as_resolved_unchecked(&self) -> usize {
+    pub unsafe fn as_resolved_unchecked(&self) -> ObjectId {
         match self {
-            Self::Resolved(index) => *index,
+            Self::Resolved(id) => *id,
             _ => unreachable_unchecked(),
         }
     }
@@ -30,9 +30,9 @@ impl<'a> Step<'a> {
         }
     }
 
-    pub fn as_resolved(&self) -> Option<usize> {
+    pub fn as_resolved(&self) -> Option<ObjectId> {
         match self {
-            Step::Resolved(index) => Some(*index),
+            Step::Resolved(id) => Some(*id),
             _ => None,
         }
     }

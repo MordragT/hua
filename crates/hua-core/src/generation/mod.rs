@@ -8,7 +8,7 @@ mod builder;
 mod generation;
 mod manager;
 
-use crate::dependency::DependencyError;
+use crate::{dependency::DependencyError, store::StoreError};
 
 #[derive(Debug, Snafu)]
 pub enum GenerationError {
@@ -30,6 +30,8 @@ pub enum GenerationError {
     GenerationIoError { id: usize, source: std::io::Error },
     #[snafu(display("IO Error: {source}"))]
     IoError { source: std::io::Error },
+    #[snafu(display("Store Error: {source}"))]
+    StoreError { source: StoreError },
 }
 
 type GenerationResult<T> = Result<T, GenerationError>;

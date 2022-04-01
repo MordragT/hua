@@ -1,88 +1,72 @@
 use crate::{
-    components::ComponentPaths, error::*, extra, package::Package, persist::Pot, Requirement,
-    UserManager,
+    extra::{self, hash::Blake3, path::ComponentPaths},
+    Requirement, UserManager,
 };
-use crc32fast::Hasher as Crc32Hasher;
-use indexmap::IndexSet;
+use rs_merkle::MerkleProof;
 use rustbreak::PathDatabase;
-
 use std::{
-    collections::HashSet,
+    collections::{BTreeSet, HashSet},
     fs::{self},
-    hash::BuildHasherDefault,
+    os::unix,
     path::{Path, PathBuf},
 };
+
+use super::*;
 
 /// The filename of the packages database of the store
 pub const PACKAGES_DB: &str = "packages.db";
 
-pub type Crc32BuildHasher = BuildHasherDefault<Crc32Hasher>;
-
 /// A Store that contains all the packages installed by any user
+/// Content Addressable Store
 #[derive(Debug)]
-pub struct Store {
+pub struct Store<B: Backend> {
     path: PathBuf,
-    database: PathDatabase<IndexSet<Package, Crc32BuildHasher>, Pot>,
-    pkgs: IndexSet<Package, Crc32BuildHasher>,
-    // TODO package is hashed by its name version and contents
-    // But with the crc32 32-bit width packages might collide
-    // with 80.000 packages probabilty of 80.000/2^32 ~ 0.002%
-    // Consider other fast error detecting hashing algorithms in the future
+    backend: B,
 }
 
-impl Store {
+impl<B: Backend<Source = PathBuf>> Store<B> {
     /// Creates a new store directory under the given path.
     /// Will return an Error if the directory already exists
-    pub fn create_at_path<P: AsRef<Path>>(path: P) -> Result<Self> {
+    pub fn init<P: AsRef<Path>>(path: P) -> StoreResult<Self> {
         let path = path.as_ref().to_owned();
-        fs::create_dir(&path)?;
+        fs::create_dir(&path).context(IoSnafu)?;
 
-        let hasher = Crc32BuildHasher::default();
-        let database =
-            PathDatabase::create_at_path(path.join(PACKAGES_DB), IndexSet::with_hasher(hasher))?;
-        let pkgs = database.get_data(false)?;
+        let backend = B::init(path.join(PACKAGES_DB))?;
 
-        Ok(Self {
-            path,
-            database,
-            pkgs,
-        })
+        Ok(Self { path, backend })
     }
 
     /// Opens a store under the specified path.
     /// Returns an error if the path does not exists or
     /// does not contain the necessary files
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let path = path.as_ref();
+    pub fn open<P: AsRef<Path>>(path: P) -> StoreResult<Self> {
+        let path = path.as_ref().to_owned();
+
         if !path.exists() {
-            return Err(Error::PathNotFound(path.to_owned()));
+            return Err(StoreError::NotExisting { path });
         }
 
-        let database = PathDatabase::load_from_path(path.join(PACKAGES_DB))?;
-        let pkgs = database.get_data(false)?;
+        let backend = B::open(path.join(PACKAGES_DB))?;
 
-        Ok(Self {
-            path: path.to_owned(),
-            database,
-            pkgs,
-        })
+        Ok(Self { path, backend })
+    }
+}
+
+impl<B: Backend> Store<B> {
+    pub fn packages(&self) -> &Packages {
+        self.backend.packages()
     }
 
-    /// Dispatch a task over all the packages stored.
-    pub fn read_packages<R, T: FnOnce(&IndexSet<Package, Crc32BuildHasher>) -> R>(
-        &self,
-        task: T,
-    ) -> Result<R> {
-        let res = self.database.read(|packages| task(&packages))?;
-        Ok(res)
+    pub fn packages_mut(&mut self) -> &mut Packages {
+        self.backend.packages_mut()
     }
 
-    pub fn packages(&self) -> &IndexSet<Package, Crc32BuildHasher> {
-        &self.pkgs
+    pub fn objects(&self) -> &Objects {
+        self.backend.objects()
     }
 
-    pub fn packages_mut(&mut self) -> &mut IndexSet<Package, Crc32BuildHasher> {
-        &mut self.pkgs
+    pub fn objects_mut(&mut self) -> &mut Objects {
+        self.backend.objects_mut()
     }
 
     // TODO return relative path for private
@@ -94,154 +78,162 @@ impl Store {
         PathBuf::from(name_version_hash)
     }
 
-    fn copy_to_store<P: AsRef<Path>, Q: AsRef<Path>>(&self, from: P, to: Q) -> Result<()> {
+    fn copy_to_store<P: AsRef<Path>, Q: AsRef<Path>>(&self, from: P, to: Q) -> StoreResult<()> {
         let from = from.as_ref();
         let to = to.as_ref();
-        fs::create_dir(to)?;
-        extra::fs::copy_to(from, to)?;
+        fs::create_dir(to).context(IoSnafu)?;
+        extra::fs::copy_to(from, to).context(IoSnafu)?;
         Ok(())
+    }
+
+    // fn object_path_in_store(&self, package_id: &ObjectId, object_id: &ObjectId) -> Option<PathBuf> {
+    //     if let Some(parent) = self.packages().path_in_store(package_id, &self.path) && let Some(obj) = self.objects().get(object_id) {
+    //         Some(obj.to_path(parent))
+    //     } else {
+    //         None
+    //     }
+    // }
+
+    fn get_full_object_path(&self, object_id: &ObjectId) -> Option<PathBuf> {
+        if let Some((obj, ext)) = self.objects().get_full(&object_id) {
+            let package_path = self.packages().path_in_store(&ext.package_id, &self.path);
+
+            package_path.map(|path| obj.to_path(path))
+        } else {
+            None
+        }
     }
 
     // TODO maybe do not return Err if package already inserted, but bool or enum
 
-    /// Inserts a package into the store and returns its hash.
-    pub fn insert<P: AsRef<Path>>(&mut self, package: Package, path: P) -> Result<usize> {
-        let path = path.as_ref();
+    /// Inserts a package into the store and returns true if the package was not present and was inserted
+    /// and false if it was already present.
+    pub fn insert<P: AsRef<Path>>(&mut self, package: Package, path: P) -> StoreResult<bool> {
+        if !package.verify(&path).context(IoSnafu)? {
+            return Err(StoreError::PackageNotVerified { package });
+        }
 
-        let (index, _) = self.pkgs.insert_full(package);
-        let package = &self.pkgs[index];
-        let new_path = self.get_package_path(&package, &index);
-        self.copy_to_store(path, self.path.join(new_path))?;
+        let path_in_store = package.path_in_store(self.path());
+        fs::create_dir(&path_in_store).context(IoSnafu)?;
 
-        Ok(index)
+        let Package {
+            id: package_id,
+            name,
+            version,
+            requires,
+            provides,
+        } = package;
+
+        let mut blobs = BTreeSet::new();
+
+        if self.packages().contains(&package_id) {
+            Ok(false)
+        } else {
+            for (id, object) in provides {
+                let obj_dest = object.to_path(&path_in_store);
+
+                if let Object::Blob(blob) = &object {
+                    blobs.insert(blob.clone());
+                }
+
+                if self.objects().contains(&id) {
+                    let from = self.get_full_object_path(&id).unwrap();
+
+                    if obj_dest.exists() {
+                        if obj_dest.is_dir() {
+                            fs::remove_dir_all(&obj_dest).context(IoSnafu)?;
+                        } else {
+                            fs::remove_file(&obj_dest).context(IoSnafu)?;
+                        }
+                    }
+                    unix::fs::symlink(from, &obj_dest).context(IoSnafu)?;
+
+                    assert!(self.objects_mut().insert_link(&id, obj_dest));
+                } else {
+                    let obj_src = object.to_path(&path);
+
+                    match object.kind() {
+                        ObjectKind::Blob => {
+                            if let Some(parent) = obj_dest.parent() && !parent.exists() {
+                                fs::create_dir_all(parent).context(IoSnafu)?
+                            }
+                            fs::copy(obj_src, obj_dest).context(IoSnafu)?;
+                        }
+                        ObjectKind::Tree => {
+                            // No need to copy anything as long as the path is created
+                            // The blobs will be copied anyway
+                            if !obj_dest.exists() {
+                                fs::create_dir_all(&obj_dest).context(IoSnafu)?
+                            }
+                        }
+                    }
+
+                    assert!(self.objects_mut().insert(package_id, id, object).is_none());
+                }
+            }
+
+            assert!(self
+                .packages_mut()
+                .insert(package_id, PackageDesc::new(name, version, blobs, requires))
+                .is_none());
+
+            Ok(true)
+        }
     }
 
     pub fn extend<'a, P: AsRef<Path>>(
         &'a mut self,
         packages: impl IntoIterator<Item = (Package, P)> + 'a,
-    ) -> impl Iterator<Item = Result<usize>> + 'a {
+    ) -> impl Iterator<Item = StoreResult<bool>> + 'a {
         packages
             .into_iter()
             .map(|(package, path)| self.insert(package, path))
     }
 
     /// Links only the package at the specified path
-    pub fn link_package(&self, index: usize, to: &ComponentPaths) -> Result<()> {
-        let package = &self.pkgs[index];
-        extra::fs::link_components(
-            &self.path.join(self.get_package_path(&package, &index)),
-            package.provides(),
-            to,
-        )?;
-        Ok(())
+    pub fn link_package(&self, id: &ObjectId, to: &ComponentPaths) -> StoreResult<()> {
+        let package = self
+            .packages()
+            .get(id)
+            .ok_or(StoreError::PackageNotFoundById { id: *id });
+
+        todo!()
+
+        // let package = &self.pkgs[index];
+        // extra::fs::link_components(
+        //     &self.path.join(self.get_package_path(&package, &index)),
+        //     package.provides(),
+        //     to,
+        // )?;
     }
 
     /// Links all the packages to the specified path.
     pub fn link_packages<'a>(
         &self,
-        indices: impl IntoIterator<Item = &'a usize>,
+        indices: impl IntoIterator<Item = &'a ObjectId>,
         to: &ComponentPaths,
-    ) -> Result<()> {
+    ) -> StoreResult<()> {
         for index in indices {
-            self.link_package(*index, to)?;
+            self.link_package(index, to)?;
         }
         Ok(())
     }
 
     /// Remove all packages that are currently unused in all generations.
-    pub fn remove_unused(&mut self, user_manager: &UserManager) -> Result<HashSet<u64>> {
-        // let to_remove = self.database.read(|db| {
-        //     let to_remove = db
-        //         .nodes
-        //         .iter()
-        //         .filter_map(|(key, package)| {
-        //             if let Ok(res) = user_manager.contains_package(key) && !res {
-        //                 Some((*key, self.get_package_path(&package, key)))
-        //             } else {
-        //                 None
-        //             }
-        //         })
-        //         .collect::<HashMap<u64, PathBuf>>();
-        //     to_remove
-        // })?;
+    pub fn remove_unused(&mut self, user_manager: &UserManager) -> StoreResult<HashSet<u64>> {
+        let indices = user_manager
+            .package_indices()
+            .map(|index| *index)
+            .collect::<HashSet<ObjectId>>();
 
-        // // TODO before deleting all the pathes verify that packages are indeed not used by checking their relations
-
-        // for (_key, path) in to_remove.iter() {
-        //     fs::remove_dir_all(self.path.join(path))?;
-        // }
-
-        // let to_remove_keys = to_remove.into_keys().collect::<HashSet<u64>>();
-
-        // self.database.write(|db| {
-        //     for key in to_remove_keys.iter() {
-        //         let res = db.nodes.remove(&key);
-        //         assert!(res.is_some());
-
-        //         let (_, idx) = db
-        //             .indices
-        //             .remove_by_left(&key)
-        //             .expect("Every key must be in the hash-index map");
-        //         let res = db.relations.remove_node(idx);
-        //         assert!(res.is_some());
-        //     }
-        // })?;
-
-        // Ok(to_remove_keys)
         todo!()
-    }
-
-    pub unsafe fn get_unchecked_index_of(&self, package: &Package) -> usize {
-        self.pkgs.get_index_of(package).unwrap_unchecked()
-    }
-
-    pub fn get_index_of(&self, package: &Package) -> Option<usize> {
-        self.pkgs.get_index_of(package)
-    }
-
-    pub fn matches<'a>(
-        &'a self,
-        requirement: &'a Requirement,
-    ) -> impl Iterator<Item = &'a Package> {
-        self.pkgs.iter().filter_map(|package| {
-            if package.matches(requirement) {
-                Some(package)
-            } else {
-                None
-            }
-        })
-    }
-
-    pub fn filter<P: Fn(&&Package) -> bool>(&self, predicate: P) -> impl Iterator<Item = &Package> {
-        self.pkgs.iter().filter(predicate)
-    }
-
-    pub fn find_by_name_starting_with(&self, name: &str) -> Option<&Package> {
-        self.find(|p| p.name().starts_with(name))
-    }
-
-    pub fn find_by_name(&self, name: &str) -> Option<&Package> {
-        self.find(|p| p.name() == name)
-    }
-
-    pub fn find<P: Fn(&&Package) -> bool>(&self, predicate: P) -> Option<&Package> {
-        self.pkgs.iter().find(predicate)
-    }
-
-    pub fn get(&self, index: usize) -> Option<&Package> {
-        self.pkgs.get_index(index)
-    }
-
-    pub unsafe fn get_unchecked(&self, index: usize) -> &Package {
-        &self.pkgs[index]
     }
 
     // TODO maybe flush just after every io operation
 
     /// Flushes all data to the backend
-    pub fn flush(self) -> Result<()> {
-        self.database.put_data(self.pkgs, true)?;
-        Ok(())
+    pub fn flush(self) -> StoreResult<()> {
+        self.backend.flush()
     }
 
     /// The path of the store
@@ -253,12 +245,12 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::PACKAGES_DB;
-    use crate::{support::*, Store};
+    use crate::{store::backend::LocalBackend, support::*, Store};
     use std::{fs, path::Path};
     use temp_dir::TempDir;
 
-    fn store_create_at_path(path: &Path) -> Store {
-        let store = Store::create_at_path(&path).unwrap();
+    fn store_create_at_path(path: &Path) -> Store<LocalBackend> {
+        let store = Store::<LocalBackend>::init(&path).unwrap();
 
         let store_db = path.join(PACKAGES_DB);
 
@@ -281,7 +273,7 @@ mod tests {
         let path = temp_dir.child("store");
         fs::create_dir(&path).unwrap();
 
-        let res = Store::create_at_path(&path);
+        let res = Store::<LocalBackend>::init(&path);
 
         assert!(res.is_err());
     }
@@ -292,7 +284,7 @@ mod tests {
         let path = temp_dir.child("store");
         let _store = store_create_at_path(&path);
 
-        let _store = Store::open(&path).unwrap();
+        let _store = Store::<LocalBackend>::open(path).unwrap();
     }
 
     #[test]
@@ -300,7 +292,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.child("store");
 
-        let res = Store::open(&path);
+        let res = Store::<LocalBackend>::open(path);
 
         assert!(res.is_err());
     }
@@ -313,11 +305,9 @@ mod tests {
 
         let mut store = store_create_at_path(&path);
         let package = pkg("package", &package_path);
+        let package_store_path = package.path_in_store(store.path());
 
-        let index = store.insert(package, package_path).unwrap();
-
-        let package = store.get(index).unwrap();
-        let package_store_path = store.path().join(store.get_package_path(&package, &index));
+        let _ = store.insert(package, package_path).unwrap();
 
         assert!(package_store_path.exists());
         assert!(package_store_path.is_dir());

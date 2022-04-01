@@ -1,6 +1,5 @@
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
-    hash::Hash,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -8,8 +7,10 @@ use std::{
 use semver::{Version, VersionReq};
 
 use crate::{
-    error::Result, extra::Source, Component, ComponentPaths, Downloader, Error, Requirement, Store,
-    UserManager,
+    error::Result,
+    extra::{path::ComponentPaths, Source},
+    store::{Backend, Blob},
+    Downloader, Requirement, Store, UserManager,
 };
 
 pub const LINUX: u8 = 0x01;
@@ -27,19 +28,19 @@ pub struct Recipe {
     license: Vec<String>,
     requires: BTreeSet<Requirement>,
     requires_build: HashSet<Requirement>,
-    provides: BTreeSet<Component>,
+    provides: BTreeSet<Blob>,
     output: Vec<PathBuf>,
     build_binaries: Option<HashMap<String, Command>>,
 }
 
-impl Hash for Recipe {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        state.write(self.name.as_bytes());
-        //state.write(self.version.as_bytes());
-        self.provides.hash(state);
-        self.requires.hash(state);
-    }
-}
+// impl Hash for Recipe {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         state.write(self.name.as_bytes());
+//         //state.write(self.version.as_bytes());
+//         self.provides.hash(state);
+//         self.requires.hash(state);
+//     }
+// }
 
 // impl Dependency for Recipe {
 //     fn name(&self) -> &String {
@@ -77,7 +78,7 @@ impl Recipe {
         license: Vec<String>,
         requires: BTreeSet<Requirement>,
         requires_build: HashSet<Requirement>,
-        provides: BTreeSet<Component>,
+        provides: BTreeSet<Blob>,
     ) -> Self {
         Self {
             name,
@@ -118,9 +119,9 @@ impl Recipe {
 
     /// Link all dependencies temporarily and processes binaries
     /// for execution in the build phase.
-    pub fn link_dependencies(
+    pub fn link_dependencies<B: Backend>(
         mut self,
-        store: &mut Store,
+        store: &mut Store<B>,
         global_paths: &ComponentPaths,
     ) -> Result<Self> {
         todo!()
@@ -139,9 +140,9 @@ impl Recipe {
     /// creates a new generation with it and its dependencies.
     /// Removes the temporary created build generation.
     /// Returns hashes of all packages installed.
-    pub fn install(
+    pub fn install<B: Backend>(
         self,
-        store: &mut Store,
+        store: &mut Store<B>,
         user_manager: &mut UserManager,
     ) -> Result<HashSet<u64>> {
         todo!()

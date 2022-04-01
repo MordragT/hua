@@ -1,4 +1,7 @@
-use crate::{Component, Package, Store};
+use crate::{
+    store::{Backend, Blob, ObjectId, PackageDesc},
+    Store,
+};
 use daggy::{Dag, NodeIndex};
 use std::collections::{HashMap, HashSet};
 
@@ -8,48 +11,50 @@ use super::{Conflict, DependencyError, DependencyResult, Requirement, Step};
 pub struct DependencyGraph<'a> {
     relations: Dag<Step<'a>, &'a Requirement, usize>,
     names: HashSet<&'a String>,
-    components: HashSet<&'a Component>,
+    objects: HashSet<&'a Blob>,
     visited: HashMap<&'a Requirement, NodeIndex<usize>>,
-    inserted: HashMap<&'a Package, NodeIndex<usize>>,
+    inserted: HashMap<ObjectId, NodeIndex<usize>>,
 }
+
+// TODO add resolve_packages function that resolves the graph
+// for specific packages not just a requirement which could lead to
+// other packages to be installed then it was intended
+
 impl<'a> DependencyGraph<'a> {
     pub fn new() -> Self {
         Self {
             relations: Dag::new(),
             names: HashSet::new(),
-            components: HashSet::new(),
+            objects: HashSet::new(),
             visited: HashMap::new(),
             inserted: HashMap::new(),
         }
     }
 
-    fn resolve_req(
+    fn resolve_req<B: Backend>(
         &mut self,
         req: &'a Requirement,
-        store: &'a Store,
+        store: &'a Store<B>,
         choices: &mut HashMap<&'a Requirement, NodeIndex<usize>>,
     ) -> DependencyResult<NodeIndex<usize>> {
         let options = store
+            .packages()
             .matches(req)
-            .map(|package| {
-                let index = unsafe { store.get_unchecked_index_of(package) };
-                (index, package)
-            })
-            .collect::<HashMap<usize, &Package>>();
+            .collect::<HashMap<&ObjectId, &PackageDesc>>();
 
         let node = match options.len() {
             0 => self.relations.add_node(Step::Unresolved(req)),
             1 => {
-                let (index, package) = unsafe { options.into_iter().next().unwrap_unchecked() };
+                let (id, package) = unsafe { options.into_iter().next().unwrap_unchecked() };
                 if let Some(conflict) = self.conflicts(package) {
                     return Err(conflict)?;
                 }
 
-                let node = self.relations.add_node(Step::Resolved(index));
+                let node = self.relations.add_node(Step::Resolved(*id));
                 self.visited.insert(req, node);
-                self.inserted.insert(package, node);
+                self.inserted.insert(*id, node);
 
-                let children = self.resolve_reqs(package.requires(), store, choices)?;
+                let children = self.resolve_reqs(&package.requires, store, choices)?;
                 let edges = children.into_iter().map(|(req, child)| (node, child, req));
                 self.relations
                     .add_edges(edges)
@@ -62,7 +67,7 @@ impl<'a> DependencyGraph<'a> {
             _len => {
                 let node = self
                     .relations
-                    .add_node(Step::Choice(options.values().map(|p| *p).collect()));
+                    .add_node(Step::Choice(options.keys().map(|id| **id).collect()));
                 choices.insert(req, node);
                 node
             }
@@ -70,10 +75,10 @@ impl<'a> DependencyGraph<'a> {
         Ok(node)
     }
 
-    fn resolve_reqs(
+    fn resolve_reqs<B: Backend>(
         &mut self,
         requirements: impl IntoIterator<Item = &'a Requirement>,
-        store: &'a Store,
+        store: &'a Store<B>,
         choices: &mut HashMap<&'a Requirement, NodeIndex<usize>>,
     ) -> DependencyResult<HashMap<&'a Requirement, NodeIndex<usize>>> {
         let mut nodes = HashMap::new();
@@ -85,14 +90,15 @@ impl<'a> DependencyGraph<'a> {
                 let inserted_options = self
                     .inserted
                     .iter()
-                    .filter_map(|(package, index)| {
+                    .filter_map(|(id, index)| {
+                        let package = unsafe { store.packages().get_unchecked(id) };
                         if package.matches(req) {
-                            Some((*package, *index))
+                            Some((*id, *index))
                         } else {
                             None
                         }
                     })
-                    .collect::<HashMap<&Package, NodeIndex<usize>>>();
+                    .collect::<HashMap<ObjectId, NodeIndex<usize>>>();
 
                 match inserted_options.len() {
                     0 => self.resolve_req(req, store, choices)?,
@@ -112,10 +118,10 @@ impl<'a> DependencyGraph<'a> {
         Ok(nodes)
     }
 
-    fn resolve_choices(
+    fn resolve_choices<B: Backend>(
         &mut self,
         choices: HashMap<&'a Requirement, NodeIndex<usize>>,
-        store: &'a Store,
+        store: &'a Store<B>,
     ) -> DependencyResult<()> {
         let mut future_choices = HashMap::new();
         for (req, node) in choices {
@@ -124,10 +130,10 @@ impl<'a> DependencyGraph<'a> {
             let options = unsafe { step.as_choice_unchecked() }.clone();
             let mut result = None;
 
-            for package in options.iter() {
-                let index = unsafe { store.get_unchecked_index_of(package) };
-                if conflicts(&mut self.names, &mut self.components, &package).is_none() {
-                    *step = Step::Resolved(index);
+            for id in options.iter() {
+                let package = unsafe { store.packages().get_unchecked(&id) };
+                if conflicts(&mut self.names, &mut self.objects, &package).is_none() {
+                    *step = Step::Resolved(*id);
                     result = Some(package);
                     break;
                 }
@@ -137,7 +143,7 @@ impl<'a> DependencyGraph<'a> {
                 None => *step = Step::Unresolved(req),
                 Some(package) => {
                     let children =
-                        self.resolve_reqs(package.requires(), store, &mut future_choices)?;
+                        self.resolve_reqs(&package.requires, store, &mut future_choices)?;
                     let edges = children.into_iter().map(|(req, child)| (node, child, req));
                     self.relations.add_edges(edges).map_err(|err| {
                         DependencyError::CycleDetected {
@@ -155,8 +161,8 @@ impl<'a> DependencyGraph<'a> {
         }
     }
 
-    fn conflicts(&mut self, package: &'a Package) -> Option<Conflict> {
-        conflicts(&mut self.names, &mut self.components, package)
+    fn conflicts(&mut self, package: &'a PackageDesc) -> Option<Conflict> {
+        conflicts(&mut self.names, &mut self.objects, package)
     }
 
     pub fn unresolved_requirements(&self) -> impl Iterator<Item = &Requirement> {
@@ -170,15 +176,14 @@ impl<'a> DependencyGraph<'a> {
         self.relations.graph().node_weights().all(Step::is_resolved)
     }
 
-    pub fn resolve(
+    pub fn resolve<B: Backend>(
         &mut self,
         requirements: impl IntoIterator<Item = &'a Requirement>,
-        store: &'a Store,
-    ) -> DependencyResult<impl Iterator<Item = usize> + '_> {
-        let to_resolve: Vec<&Requirement> = requirements.into_iter().collect();
+        store: &'a Store<B>,
+    ) -> DependencyResult<impl Iterator<Item = ObjectId> + '_> {
         let mut choices = HashMap::new();
 
-        let _nodes = self.resolve_reqs(to_resolve, store, &mut choices)?;
+        let _nodes = self.resolve_reqs(requirements, store, &mut choices)?;
         self.resolve_choices(choices, store)?;
 
         if self.is_resolved() {
@@ -200,16 +205,16 @@ impl<'a> DependencyGraph<'a> {
 
 fn conflicts<'a>(
     names: &mut HashSet<&'a String>,
-    components: &mut HashSet<&'a Component>,
-    package: &'a Package,
+    objects: &mut HashSet<&'a Blob>,
+    package: &'a PackageDesc,
 ) -> Option<Conflict<'a>> {
-    if !names.insert(package.name()) {
-        return Some(Conflict::Name(package.name()));
+    if !names.insert(&package.name) {
+        return Some(Conflict::Name(&package.name));
     }
 
-    for component in package.provides() {
-        if !components.insert(component) {
-            return Some(Conflict::Component(component));
+    for blob in package.blobs.iter() {
+        if !objects.insert(blob) {
+            return Some(Conflict::Blob(blob));
         }
     }
     None
@@ -217,10 +222,10 @@ fn conflicts<'a>(
 
 #[cfg(test)]
 mod tests {
-    use std::assert_matches::assert_matches;
-
+    use crate::store::{LocalBackend, StoreError};
+    use crate::support::*;
     use crate::{dependency::DependencyError, DependencyGraph, Store};
-    use crate::{support::*, Error};
+    use std::assert_matches::assert_matches;
     use temp_dir::TempDir;
 
     #[test]
@@ -229,7 +234,7 @@ mod tests {
         let store_path = temp_dir.child("store");
 
         let mut graph = DependencyGraph::new();
-        let mut store = Store::create_at_path(store_path).unwrap();
+        let mut store = Store::<LocalBackend>::init(store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
@@ -259,7 +264,7 @@ mod tests {
         ];
         store
             .extend(pkgs)
-            .collect::<Result<Vec<usize>, Error>>()
+            .collect::<Result<Vec<bool>, StoreError>>()
             .unwrap();
 
         let indices = graph.resolve(reqs, &store).unwrap();
@@ -274,7 +279,7 @@ mod tests {
         let store_path = temp_dir.child("store");
 
         let mut graph = DependencyGraph::new();
-        let mut store = Store::create_at_path(store_path).unwrap();
+        let mut store = Store::<LocalBackend>::init(store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
@@ -287,7 +292,7 @@ mod tests {
         let pkgs = vec![(one, one_path), (two, two_path)];
         store
             .extend(pkgs)
-            .collect::<Result<Vec<usize>, Error>>()
+            .collect::<Result<Vec<bool>, StoreError>>()
             .unwrap();
 
         let err = graph
@@ -304,7 +309,7 @@ mod tests {
         let store_path = temp_dir.child("store");
 
         let mut graph = DependencyGraph::new();
-        let mut store = Store::create_at_path(store_path).unwrap();
+        let mut store = Store::<LocalBackend>::init(store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg_req("one", &one_path, [req("two", ">=1.0")]);
@@ -317,7 +322,7 @@ mod tests {
         let pkgs = vec![(one, one_path), (two, two_path)];
         store
             .extend(pkgs)
-            .collect::<Result<Vec<usize>, Error>>()
+            .collect::<Result<Vec<bool>, StoreError>>()
             .unwrap();
 
         let err = graph
@@ -334,16 +339,17 @@ mod tests {
         let store_path = temp_dir.child("store");
 
         let mut graph = DependencyGraph::new();
-        let mut store = Store::create_at_path(store_path).unwrap();
+        let mut store = Store::<LocalBackend>::init(store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
+        let req_one = req("one", ">=1.0.0");
 
         let two_path = temp_dir.child("two");
-        let two = pkg_req("two", &two_path, [to_req(&one)]);
+        let two = pkg_req("two", &two_path, [req_one]);
 
         let three_path = temp_dir.child("three");
-        let three = pkg_ver("one", &three_path, "1.1.1");
+        let three = pkg_prov("one", &three_path, "other");
 
         let req_three = to_req(&three);
         let req_two = to_req(&two);
@@ -352,7 +358,7 @@ mod tests {
         let pkgs = vec![(one, one_path), (two, two_path), (three, three_path)];
         store
             .extend(pkgs)
-            .collect::<Result<Vec<usize>, Error>>()
+            .collect::<Result<Vec<bool>, StoreError>>()
             .unwrap();
 
         let err = graph
@@ -369,12 +375,12 @@ mod tests {
     }
 
     #[test]
-    fn depdendency_graph_resolve_err_conflict_component() {
+    fn depdendency_graph_resolve_err_conflict_blob() {
         let temp_dir = TempDir::new().unwrap();
         let store_path = temp_dir.child("store");
 
         let mut graph = DependencyGraph::new();
-        let mut store = Store::create_at_path(store_path).unwrap();
+        let mut store = Store::<LocalBackend>::init(store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
@@ -389,7 +395,7 @@ mod tests {
         let pkgs = vec![(one, one_path), (two, two_path)];
         store
             .extend(pkgs)
-            .collect::<Result<Vec<usize>, Error>>()
+            .collect::<Result<Vec<bool>, StoreError>>()
             .unwrap();
 
         let err = graph
@@ -397,6 +403,6 @@ mod tests {
             .map(|iter| iter.count())
             .unwrap_err();
 
-        assert_matches!(err, DependencyError::ConflictingComponent { component: _ });
+        assert_matches!(err, DependencyError::ConflictingBlob { blob: _ });
     }
 }

@@ -1,4 +1,3 @@
-use crate::{Component, ComponentPaths};
 use std::{
     collections::HashSet,
     fs,
@@ -7,6 +6,8 @@ use std::{
     os::unix,
     path::{Path, PathBuf},
 };
+
+use super::path::ComponentPaths;
 
 // TODO: better naming
 // TODO: tests
@@ -171,34 +172,34 @@ pub fn link_component_paths(
 /// Links components to component paths.
 /// Creates the directories of the destination if they do not exist
 /// Returns a list of all links created
-pub fn link_components<'a, P: AsRef<Path>>(
-    base: P,
-    from: impl IntoIterator<Item = &'a Component>,
-    to: &'a ComponentPaths,
-) -> Result<HashSet<PathBuf>> {
-    let base = base.as_ref();
+// pub fn link_components<'a, P: AsRef<Path>>(
+//     base: P,
+//     from: impl IntoIterator<Item = &'a Component>,
+//     to: &'a ComponentPaths,
+// ) -> Result<HashSet<PathBuf>> {
+//     let base = base.as_ref();
 
-    to.create_dirs()?;
-    let mut collector = HashSet::new();
+//     to.create_dirs()?;
+//     let mut collector = HashSet::new();
 
-    for component in from {
-        let to = match component {
-            Component::Binary(_) => &to.binary,
-            Component::Config(_) => &to.config,
-            Component::Library(_) => &to.library,
-            Component::Share(_) => &to.share,
-        };
-        inner_io_task_into(
-            &component.relative_path().to_path(base),
-            to,
-            &symlink,
-            &fold_hash_set_path_buf,
-            &mut collector,
-        )?;
-    }
+//     for component in from {
+//         let to = match component {
+//             Component::Binary(_) => &to.binary,
+//             Component::Config(_) => &to.config,
+//             Component::Library(_) => &to.library,
+//             Component::Share(_) => &to.share,
+//         };
+//         inner_io_task_into(
+//             &component.relative_path().to_path(base),
+//             to,
+//             &symlink,
+//             &fold_hash_set_path_buf,
+//             &mut collector,
+//         )?;
+//     }
 
-    Ok(collector)
-}
+//     Ok(collector)
+// }
 
 fn copy(from: &Path, to: &Path) -> std::io::Result<u64> {
     fs::copy(from, to)

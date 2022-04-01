@@ -1,4 +1,4 @@
-use crate::Component;
+use crate::store::Blob;
 use snafu::prelude::*;
 use std::{fmt::Debug, hash::Hash};
 
@@ -15,7 +15,7 @@ pub use step::Step;
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum Conflict<'a> {
     Name(&'a String),
-    Component(&'a Component),
+    Blob(&'a Blob),
 }
 
 #[derive(Debug, Snafu, PartialEq, Eq)]
@@ -24,8 +24,8 @@ pub enum DependencyError {
     CycleDetected { error: String },
     #[snafu(display("Found conflicting name {name}"))]
     ConflictingName { name: String },
-    #[snafu(display("Found conflicting component {component}"))]
-    ConflictingComponent { component: Component },
+    #[snafu(display("Found conflicting blob {blob:#?}"))]
+    ConflictingBlob { blob: Blob },
     #[snafu(display("Requirements not resolvable"))]
     RequirementsNotResolvable,
 }
@@ -33,9 +33,7 @@ pub enum DependencyError {
 impl<'a> From<Conflict<'a>> for DependencyError {
     fn from(conflict: Conflict<'a>) -> Self {
         match conflict {
-            Conflict::Component(c) => Self::ConflictingComponent {
-                component: c.to_owned(),
-            },
+            Conflict::Blob(b) => Self::ConflictingBlob { blob: b.to_owned() },
             Conflict::Name(n) => Self::ConflictingName { name: n.to_owned() },
         }
     }

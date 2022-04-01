@@ -1,13 +1,12 @@
 use reqwest::Url;
 use semver::{Comparator, Op, Version, VersionReq};
-use std::{
-    hash::{Hash, Hasher},
-    io,
-    path::{Path, PathBuf},
-};
+use std::path::PathBuf;
 
 pub mod fs;
+pub mod hash;
 pub mod mem;
+pub mod path;
+pub mod persist;
 
 pub struct Remote<T> {
     pub data: T,
@@ -35,23 +34,5 @@ pub fn exact_version_req(v: Version) -> VersionReq {
             patch: Some(v.patch),
             pre: v.pre,
         }],
-    }
-}
-
-// TODO use File and Reader to hash contents not read_dir
-
-/// Calculates a hash with all the files under the given path
-pub fn hash_path<P: AsRef<Path>, H: Hasher>(path: P, state: &mut H) -> io::Result<()> {
-    let path = path.as_ref();
-    if path.is_dir() {
-        path.read_dir()?
-            .map(|res| match res {
-                Ok(entry) => hash_path(entry.path(), state),
-                Err(e) => Err(e.into()),
-            })
-            .collect::<io::Result<()>>()
-    } else {
-        std::fs::read(path)?.hash(state);
-        Ok(())
     }
 }

@@ -1,5 +1,7 @@
 # Store
 
+What is the difference extensional store design and intensional design ?
+
 Every package that is installed in hua will be saved in the store. This allows different profiles
 to use the same store and dramatically simplifies our caching system. Also this opens up the
 possibility to use a local store accross multiple installations in the future.
