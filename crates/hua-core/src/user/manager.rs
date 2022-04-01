@@ -163,7 +163,7 @@ impl UserManager {
         self.current_generation_manager().list_generations();
     }
 
-    pub fn package_indices(&self) -> impl Iterator<Item = &PackageId> {
+    pub fn packages(&self) -> impl Iterator<Item = &PackageId> {
         self.users
             .list
             .iter()
@@ -172,8 +172,8 @@ impl UserManager {
     }
 
     /// Checks wether the package is stored inside any generation of all users.
-    pub fn contains_package_index(&self, index: &PackageId) -> bool {
-        self.package_indices().find(|idx| *idx == index).is_some()
+    pub fn contains(&self, index: &PackageId) -> bool {
+        self.packages().find(|idx| *idx == index).is_some()
     }
 
     /// Returns the path of the user manager
@@ -417,7 +417,7 @@ mod tests {
         let path = temp_dir.child("user");
         let user_manager = UserManager::create_at_path(path).unwrap();
 
-        let res = user_manager.contains_package_index(&[1_u8; 32].into());
+        let res = user_manager.contains(&[1_u8; 32].into());
 
         assert!(!res);
     }
@@ -440,7 +440,7 @@ mod tests {
         let req = req("one", ">0.0.1");
         let _ = user_manager.insert_requirement(req, &store).unwrap();
 
-        let res = user_manager.contains_package_index(&id);
+        let res = user_manager.contains(&id);
 
         assert!(res);
     }

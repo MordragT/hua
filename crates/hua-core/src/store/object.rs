@@ -59,13 +59,13 @@ impl Link {
 pub enum ObjectKind {
     Tree,
     Blob,
-    // Link,
+    Link,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum Object {
     Tree(Tree),
-    // Link(Link),
+    Link(Link),
     Blob(Blob),
 }
 
@@ -74,7 +74,7 @@ impl Object {
         match &self {
             Self::Tree(_) => ObjectKind::Tree,
             Self::Blob(_) => ObjectKind::Blob,
-            // Self::Link(_) => ObjectKind::Link,
+            Self::Link(_) => ObjectKind::Link,
         }
     }
 
@@ -82,7 +82,7 @@ impl Object {
         match &self {
             Self::Tree(tree) => tree.to_path(base),
             Self::Blob(blob) => blob.to_path(base),
-            // Self::Link(link) => link.to_path(base),
+            Self::Link(link) => link.to_path(base),
         }
     }
 
@@ -122,35 +122,35 @@ impl Object {
         }
     }
 
-    // pub fn as_link(&self) -> Option<&Link> {
-    //     match &self {
-    //         Self::Link(link) => Some(link),
-    //         _ => None,
-    //     }
-    // }
+    pub fn as_link(&self) -> Option<&Link> {
+        match &self {
+            Self::Link(link) => Some(link),
+            _ => None,
+        }
+    }
 
-    // pub fn is_link(&self) -> bool {
-    //     self.kind() == ObjectKind::Link
-    // }
+    pub fn is_link(&self) -> bool {
+        self.kind() == ObjectKind::Link
+    }
 
-    // pub fn into_link(self) -> Option<Link> {
-    //     match self {
-    //         Self::Link(link) => Some(link),
-    //         _ => None,
-    //     }
-    // }
+    pub fn into_link(self) -> Option<Link> {
+        match self {
+            Self::Link(link) => Some(link),
+            _ => None,
+        }
+    }
 }
 
 impl Ord for Object {
     fn cmp(&self, other: &Self) -> Ordering {
         match (&self, other) {
-            // (Object::Link(_), Object::Tree(_)) => Ordering::Greater,
-            // (Object::Link(_), Object::Blob(_)) => Ordering::Greater,
-            // (Object::Link(link), Object::Link(other)) => link.cmp(other),
-            // (Object::Tree(_), Object::Link(_)) => Ordering::Less,
+            (Object::Link(_), Object::Tree(_)) => Ordering::Greater,
+            (Object::Link(_), Object::Blob(_)) => Ordering::Greater,
+            (Object::Link(link), Object::Link(other)) => link.cmp(other),
+            (Object::Tree(_), Object::Link(_)) => Ordering::Less,
             (Object::Tree(_), Object::Blob(_)) => Ordering::Greater,
             (Object::Tree(tree), Object::Tree(other)) => tree.cmp(other),
-            // (Object::Blob(_), Object::Link(_)) => Ordering::Less,
+            (Object::Blob(_), Object::Link(_)) => Ordering::Less,
             (Object::Blob(_), Object::Tree(_)) => Ordering::Less,
             (Object::Blob(blob), Object::Blob(other)) => blob.cmp(other),
         }
@@ -175,23 +175,23 @@ impl From<Blob> for Object {
     }
 }
 
-// impl From<Link> for Object {
-//     fn from(link: Link) -> Self {
-//         Self::Link(link)
-//     }
-// }
+impl From<Link> for Object {
+    fn from(link: Link) -> Self {
+        Self::Link(link)
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ObjectExt {
     pub links: HashMap<PackageId, Link>,
-    pub package_id: PackageId,
+    // pub package_id: PackageId,
 }
 
 impl ObjectExt {
     pub fn new(package_id: PackageId) -> Self {
         Self {
             links: HashMap::new(),
-            package_id,
+            // package_id,
         }
     }
 }
@@ -251,46 +251,60 @@ impl Objects {
         }
     }
 
-    pub fn get_children<'a>(
-        &'a self,
-        package_id: &'a PackageId,
-    ) -> impl Iterator<Item = &ObjectId> + 'a {
-        self.extensions.iter().filter_map(|(id, ext)| {
-            if ext.package_id == *package_id || ext.links.contains_key(package_id) {
-                Some(id)
+    pub unsafe fn get_full_unchecked(&self, id: &ObjectId) -> (&Object, &ObjectExt) {
+        self.get_full(id).unwrap_unchecked()
+    }
+
+    pub unsafe fn get_full_mut_unchecked(
+        &mut self,
+        id: &ObjectId,
+    ) -> (&mut Object, &mut ObjectExt) {
+        self.get_full_mut(id).unwrap_unchecked()
+    }
+
+    pub fn remove_objects<'a>(
+        &'a mut self,
+        ids: impl IntoIterator<Item = &'a ObjectId> + 'a,
+    ) -> impl Iterator<Item = Option<(Object, ObjectExt)>> + 'a {
+        ids.into_iter().map(|id| {
+            let object = self.nodes.remove(id);
+            let ext = self.extensions.remove(id);
+
+            if let Some(object) = object && let Some(ext) = ext {
+                Some((object, ext))
             } else {
                 None
             }
         })
     }
 
-    pub fn read_children<'a, P, R>(
+    pub fn read_objects<'a, P, R>(
         &'a self,
-        package_id: &'a PackageId,
-        predicate: P,
+        ids: impl IntoIterator<Item = &'a ObjectId> + 'a,
+        mut predicate: P,
     ) -> impl Iterator<Item = R> + 'a
     where
-        P: Fn(&Object) -> R + 'a,
+        P: FnMut(&Object, &ObjectExt) -> R + 'a,
     {
-        self.get_children(package_id).map(move |id| {
-            let object = unsafe { self.get_unchecked(id) };
-            predicate(object)
+        ids.into_iter().map(move |id| {
+            let (object, ext) = unsafe { self.get_full_unchecked(id) };
+            predicate(object, ext)
         })
     }
 
-    // pub fn insert_link(
-    //     &mut self,
-    //     src_object: &ObjectId,
-    //     target_package: PackageId,
-    //     link: PathBuf,
-    // ) -> bool {
-    //     if let Some(ext) = self.extensions.get_mut(src_object) {
-    //         ext.links.insert(target_package, link);
-    //         true
-    //     } else {
-    //         false
-    //     }
-    // }
+    pub fn read_objects_mut<'a, P, R>(
+        &'a mut self,
+        ids: impl IntoIterator<Item = &'a ObjectId> + 'a,
+        mut predicate: P,
+    ) -> impl Iterator<Item = R> + 'a
+    where
+        P: FnMut(&mut Object, &mut ObjectExt) -> R + 'a,
+    {
+        ids.into_iter().map(move |id| {
+            let (object, ext) = unsafe { self.get_full_mut_unchecked(&id) };
+            predicate(object, ext)
+        })
+    }
 
     pub fn insert(
         &mut self,
@@ -306,6 +320,40 @@ impl Objects {
             None
         }
     }
+
+    // pub fn get_foreign_links<'a>(
+    //     &'a self,
+    //     package_id: &'a PackageId,
+    // ) -> impl Iterator<Item = (PackageId, ObjectId, &'a Link)> + 'a {
+    //     self.extensions
+    //         .iter()
+    //         .filter_map(|(id, ext)| {
+    //             if ext.package_id == *package_id && ext.links.len() > 0 {
+    //                 Some(
+    //                     ext.links
+    //                         .iter()
+    //                         .map(|(package_id, link)| (*package_id, *id, link)),
+    //                 )
+    //             } else {
+    //                 None
+    //             }
+    //         })
+    //         .flatten()
+    // }
+
+    // pub fn insert_link(
+    //     &mut self,
+    //     src_object: &ObjectId,
+    //     target_package: PackageId,
+    //     link: PathBuf,
+    // ) -> bool {
+    //     if let Some(ext) = self.extensions.get_mut(src_object) {
+    //         ext.links.insert(target_package, link);
+    //         true
+    //     } else {
+    //         false
+    //     }
+    // }
 
     // pub fn remove_tree_children_links(
     //     &mut self,

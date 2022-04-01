@@ -125,6 +125,7 @@ impl fmt::Display for Package {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Packages {
     nodes: HashMap<PackageId, PackageDesc>,
+    children: HashMap<PackageId, HashSet<ObjectId>>,
 }
 
 impl Packages {
@@ -140,7 +141,13 @@ impl Packages {
         self.nodes.contains_key(id)
     }
 
-    pub fn insert(&mut self, id: PackageId, desc: PackageDesc) -> Option<PackageDesc> {
+    pub fn insert(
+        &mut self,
+        id: PackageId,
+        desc: PackageDesc,
+        objects: HashSet<ObjectId>,
+    ) -> Option<PackageDesc> {
+        self.children.insert(id, objects);
         self.nodes.insert(id, desc)
     }
 
@@ -150,6 +157,21 @@ impl Packages {
 
     pub unsafe fn get_unchecked(&self, id: &PackageId) -> &PackageDesc {
         self.nodes.get(id).unwrap_unchecked()
+    }
+
+    pub fn get_children(&self, id: &PackageId) -> Option<&HashSet<ObjectId>> {
+        self.children.get(id)
+    }
+
+    pub fn remove(&mut self, id: &PackageId) -> Option<(PackageDesc, HashSet<ObjectId>)> {
+        let desc = self.nodes.remove(id);
+        let children = self.children.remove(id);
+
+        if let Some(desc) = desc && let Some(children) = children {
+            Some((desc, children))
+        } else {
+            None
+        }
     }
 
     pub fn matches<'a>(
@@ -174,27 +196,39 @@ impl Packages {
         }
     }
 
-    pub fn filter<P: Fn(&PackageDesc) -> bool>(
+    pub fn filter<P: Fn(&PackageId, &PackageDesc) -> bool>(
         &self,
         predicate: P,
     ) -> impl Iterator<Item = (&PackageId, &PackageDesc)> {
         self.nodes
             .iter()
-            .filter(move |(_id, desc)| predicate(*desc))
+            .filter(move |(id, desc)| predicate(*id, *desc))
     }
 
     pub fn find_by_name_starting_with(&self, name: &str) -> Option<(&PackageId, &PackageDesc)> {
-        self.find(|p| p.name.starts_with(name))
+        self.find(|_id, p| p.name.starts_with(name))
     }
 
     pub fn find_by_name(&self, name: &str) -> Option<(&PackageId, &PackageDesc)> {
-        self.find(|p| p.name == name)
+        self.find(|_id, p| p.name == name)
     }
 
-    pub fn find<P: Fn(&PackageDesc) -> bool>(
+    pub fn find<P: Fn(&PackageId, &PackageDesc) -> bool>(
         &self,
         predicate: P,
     ) -> Option<(&PackageId, &PackageDesc)> {
-        self.nodes.iter().find(move |(_id, desc)| predicate(*desc))
+        self.nodes
+            .iter()
+            .find(move |(id, desc)| predicate(*id, *desc))
+    }
+
+    pub fn find_package_id(&self, object_id: &ObjectId) -> Option<&PackageId> {
+        self.children.iter().find_map(|(package_id, set)| {
+            if set.contains(object_id) {
+                Some(package_id)
+            } else {
+                None
+            }
+        })
     }
 }

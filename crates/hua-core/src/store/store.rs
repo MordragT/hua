@@ -65,8 +65,8 @@ impl<B: Backend> Store<B> {
     }
 
     fn get_full_object_path(&self, object_id: &ObjectId) -> Option<PathBuf> {
-        if let Some((obj, ext)) = self.objects().get_full(&object_id) {
-            let package_path = self.packages().path_in_store(&ext.package_id, &self.path);
+        if let Some(obj) = self.objects().get(&object_id) && let Some(package_id) = self.packages().find_package_id(object_id) {
+            let package_path = self.packages().path_in_store(&package_id, &self.path);
 
             package_path.map(|path| obj.to_path(path))
         } else {
@@ -119,6 +119,7 @@ impl<B: Backend> Store<B> {
             Ok(false)
         } else {
             let mut resolved = HashSet::new();
+            let mut object_ids = HashSet::new();
 
             // should be ordered (by BTreeMap and Object::cmp) so that trees with lower depth come first
             for (id, tree) in trees.iter() {
@@ -139,13 +140,15 @@ impl<B: Backend> Store<B> {
                         .links
                         .insert(package_id, Link::new(tree.path.clone(), *id))
                         .is_none());
+                    object_ids.insert(*id);
                 } else {
                     fs::create_dir(dest).context(IoSnafu)?;
 
                     let old = self
                         .objects_mut()
                         .insert(package_id, *id, tree.clone().into());
-                    assert!(old.is_none())
+                    assert!(old.is_none());
+                    object_ids.insert(*id);
                 }
             }
 
@@ -168,12 +171,14 @@ impl<B: Backend> Store<B> {
                         .links
                         .insert(package_id, Link::new(blob.path, id))
                         .is_none());
+                    object_ids.insert(id);
                 } else {
                     let source = blob.to_path(&path);
                     fs::copy(source, dest).context(IoSnafu)?;
 
                     let old = self.objects_mut().insert(package_id, id, blob.into());
-                    assert!(old.is_none())
+                    assert!(old.is_none());
+                    object_ids.insert(id);
                 }
             }
 
@@ -181,7 +186,8 @@ impl<B: Backend> Store<B> {
                 .packages_mut()
                 .insert(
                     package_id,
-                    PackageDesc::new(name, version, pkg_blobs, requires)
+                    PackageDesc::new(name, version, pkg_blobs, requires),
+                    object_ids
                 )
                 .is_none());
 
@@ -198,18 +204,23 @@ impl<B: Backend> Store<B> {
             .map(|(package, path)| self.insert(package, path))
     }
 
-    /// Links only the package at the specified path
-    pub fn link_package(&self, id: &PackageId, to: &ComponentPathBuf) -> StoreResult<()> {
+    /// Links only the package at the specified path.
+    /// If the package itself has object linked to other packages,
+    /// link to the link.
+    pub fn link_package(&self, package_id: &PackageId, to: &ComponentPathBuf) -> StoreResult<()> {
         let root = self
             .packages()
-            .path_in_store(id, &self.path)
-            .ok_or(StoreError::PackageNotFoundById { id: *id })?;
+            .path_in_store(package_id, &self.path)
+            .ok_or(StoreError::PackageNotFoundById { id: *package_id })?;
 
         to.create_dirs().context(IoSnafu)?;
 
+        // I checked beforehand if package is in scope
+        let object_ids = unsafe { self.packages().get_children(package_id).unwrap_unchecked() };
+
         self.objects()
-            .read_children(id, |object| match object.kind() {
-                ObjectKind::Blob => {
+            .read_objects(object_ids, |object, _ext| match object.kind() {
+                ObjectKind::Blob | ObjectKind::Link => {
                     let absolute = object.to_path(&root);
                     let relative = absolute.strip_prefix(&root).context(StripPrefixSnafu)?;
 
@@ -260,12 +271,30 @@ impl<B: Backend> Store<B> {
         Ok(())
     }
 
+    // fn remove(&mut self, package_id: &PackageId) -> Option<()> {
+    //     if let Some((desc, object_ids)) = self.packages_mut().remove(package_id) {
+    //         if let Some(iter) = self.objects_mut().remove_objects(ids) {
+    //             iter.
+    //         }
+    //     }
+    //     None
+    // }
+
     /// Remove all packages that are currently unused in all generations.
-    pub fn remove_unused(&mut self, user_manager: &UserManager) -> StoreResult<HashSet<u64>> {
-        let indices = user_manager
-            .package_indices()
-            .map(|index| *index)
-            .collect::<HashSet<PackageId>>();
+    pub fn remove_unused(&mut self, user_manager: &UserManager) -> StoreResult<Vec<PackageId>> {
+        let used_packages = user_manager.packages().collect::<HashSet<&PackageId>>();
+
+        let to_remove = self
+            .packages()
+            .filter(|id, _desc| !used_packages.contains(id))
+            .map(|(id, _desc)| *id)
+            .collect::<Vec<PackageId>>();
+
+        // for id in to_remove {
+        //     let package = s
+
+        //     for (other_id, object_id, link) in self.objects().get_foreign_links(&id) {}
+        // }
 
         todo!()
     }
@@ -286,7 +315,9 @@ impl<B: Backend> Store<B> {
 #[cfg(test)]
 mod tests {
     use super::PACKAGES_DB;
-    use crate::{extra::path::ComponentPathBuf, store::backend::LocalBackend, support::*, Store};
+    use crate::{
+        extra::path::ComponentPathBuf, store::backend::LocalBackend, support::*, Store, UserManager,
+    };
     use std::{fs, path::Path};
     use temp_dir::TempDir;
 
@@ -359,43 +390,50 @@ mod tests {
         assert!(package_store_file.is_file());
     }
 
-    // #[test]
-    // fn store_remove_unused() {
-    //     let temp_dir = TempDir::new().unwrap();
-    //     let path = temp_dir.child("store");
-    //     let pkg_path = temp_dir.child("package");
-    //     let pkg_two_path = temp_dir.child("package2");
-    //     let user_manager_path = temp_dir.child("user");
+    #[test]
+    fn store_remove_unused() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.child("store");
+        let one_path = temp_dir.child("one");
+        let two_path = temp_dir.child("two");
+        let user_manager_path = temp_dir.child("user");
 
-    //     let mut store = store_create_at_path(&path);
-    //     let pkg = package(&pkg_path, "package");
-    //     let pkg_two = package(&pkg_two_path, "package2");
+        let mut store = store_create_at_path(&path);
+        let one = pkg("one", &one_path);
+        let two = pkg("two", &two_path);
+        let one_id = one.id;
+        let two_id = two.id;
 
-    //     let hash = store.insert(pkg, pkg_path).unwrap();
-    //     let hash_two = store.insert(pkg_two, pkg_two_path).unwrap();
+        let one_req = to_req(&one);
+        let two_req = to_req(&two);
 
-    //     let mut user_manager = UserManager::create_at_path(&user_manager_path).unwrap();
-    //     assert!(user_manager.insert_package(&hash, &mut store).unwrap());
+        store.insert(one, one_path).unwrap();
+        store.insert(two, two_path).unwrap();
 
-    //     let removed = store.remove_unused(&mut user_manager).unwrap();
+        let mut user_manager = UserManager::create_at_path(&user_manager_path).unwrap();
+        assert!(user_manager
+            .insert_requirement(one_req, &mut store)
+            .unwrap());
 
-    //     assert_eq!(removed.len(), 1);
-    //     assert!(removed.get(&hash_two).is_some());
-    // }
+        let removed = store.remove_unused(&mut user_manager).unwrap();
 
-    // #[test]
-    // fn store_remove_unused_empty() {
-    //     let temp_dir = TempDir::new().unwrap();
-    //     let path = temp_dir.child("store");
-    //     let user_manager_path = temp_dir.child("user");
+        // assert_eq!(removed.len(), 1);
+        // assert!(removed.get(&hash_two).is_some());
+    }
 
-    //     let mut store = store_create_at_path(&path);
-    //     let mut user_manager = UserManager::create_at_path(&user_manager_path).unwrap();
+    #[test]
+    fn store_remove_unused_empty() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.child("store");
+        let user_manager_path = temp_dir.child("user");
 
-    //     let removed = store.remove_unused(&mut user_manager).unwrap();
+        let mut store = store_create_at_path(&path);
+        let mut user_manager = UserManager::create_at_path(&user_manager_path).unwrap();
 
-    //     assert_eq!(removed.len(), 0);
-    // }
+        let removed = store.remove_unused(&mut user_manager).unwrap();
+
+        assert_eq!(removed.len(), 0);
+    }
 
     #[test]
     fn store_link_package() {
@@ -417,11 +455,6 @@ mod tests {
         global_paths.create_dirs().unwrap();
 
         store.link_package(&package_id, &global_paths).unwrap();
-
-        // let mut eq_linked = HashSet::new();
-        // eq_linked.insert(child_hash);
-        // eq_linked.insert(parent_hash);
-        // assert_eq!(linked, eq_linked);
 
         let package_link = global_paths.library.join("package.so");
         assert!(package_link.exists());
