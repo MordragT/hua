@@ -27,6 +27,8 @@ pub enum StoreError {
     NotExisting { path: PathBuf },
     #[snafu(display("IoError: {source}"))]
     IoError { source: std::io::Error },
+    #[snafu(display("FsExtraError: {source}"))]
+    FsExtraError { source: fs_extra::error::Error },
     #[snafu(display("Waldir Error: {source}"))]
     WalkDirError { source: walkdir::Error },
     #[snafu(display("Package could not be verified: {package}"))]

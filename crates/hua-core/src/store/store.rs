@@ -1,6 +1,7 @@
 use crate::{extra::path::ComponentPathBuf, UserManager};
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
+    assert_matches::assert_matches,
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fs::{self},
     os::unix,
     path::{Path, PathBuf},
@@ -144,9 +145,7 @@ impl<B: Backend> Store<B> {
                 } else {
                     fs::create_dir(dest).context(IoSnafu)?;
 
-                    let old = self
-                        .objects_mut()
-                        .insert(package_id, *id, tree.clone().into());
+                    let old = self.objects_mut().insert(*id, tree.clone().into());
                     assert!(old.is_none());
                     object_ids.insert(*id);
                 }
@@ -176,7 +175,7 @@ impl<B: Backend> Store<B> {
                     let source = blob.to_path(&path);
                     fs::copy(source, dest).context(IoSnafu)?;
 
-                    let old = self.objects_mut().insert(package_id, id, blob.into());
+                    let old = self.objects_mut().insert(id, blob.into());
                     assert!(old.is_none());
                     object_ids.insert(id);
                 }
@@ -271,14 +270,19 @@ impl<B: Backend> Store<B> {
         Ok(())
     }
 
-    // fn remove(&mut self, package_id: &PackageId) -> Option<()> {
-    //     if let Some((desc, object_ids)) = self.packages_mut().remove(package_id) {
-    //         if let Some(iter) = self.objects_mut().remove_objects(ids) {
-    //             iter.
-    //         }
-    //     }
-    //     None
-    // }
+    fn remove(
+        &mut self,
+        package_id: &PackageId,
+    ) -> Option<(PackageDesc, Vec<(ObjectId, Object, ObjectExt)>)> {
+        if let Some((desc, object_ids)) = self.packages_mut().remove(package_id) {
+            let objects =
+                unsafe { self.objects_mut().remove_objects_unchecked(&object_ids) }.collect();
+
+            Some((desc, objects))
+        } else {
+            None
+        }
+    }
 
     /// Remove all packages that are currently unused in all generations.
     pub fn remove_unused(&mut self, user_manager: &UserManager) -> StoreResult<Vec<PackageId>> {
@@ -290,13 +294,62 @@ impl<B: Backend> Store<B> {
             .map(|(id, _desc)| *id)
             .collect::<Vec<PackageId>>();
 
-        // for id in to_remove {
-        //     let package = s
+        for package_id in &to_remove {
+            let root = unsafe {
+                self.packages()
+                    .path_in_store(&package_id, &self.path)
+                    .unwrap_unchecked()
+            };
+            let (_desc, objects) = unsafe { self.remove(package_id).unwrap_unchecked() };
 
-        //     for (other_id, object_id, link) in self.objects().get_foreign_links(&id) {}
-        // }
+            for (object_id, mut object, mut ext) in objects {
+                let absolute_src = object.to_path(&root);
+                let mut links = ext.links.into_iter();
 
-        todo!()
+                if let Some((target, link)) = links.next() {
+                    let target_root = unsafe {
+                        self.packages()
+                            .path_in_store(&target, &self.path)
+                            .unwrap_unchecked()
+                    };
+                    let dest = link.to_path(&target_root);
+
+                    match object.kind() {
+                        ObjectKind::Blob => {
+                            // Delete link
+                            fs::remove_file(&dest).context(IoSnafu)?;
+                            fs::copy(absolute_src, dest).context(IoSnafu)?;
+                        }
+                        ObjectKind::Tree => {
+                            fs::remove_dir(&dest).context(IoSnafu)?;
+                            fs_extra::dir::move_dir(
+                                absolute_src,
+                                dest,
+                                &fs_extra::dir::CopyOptions::default(),
+                            )
+                            .context(FsExtraSnafu)?;
+                        }
+                        ObjectKind::Link => todo!(),
+                    }
+
+                    ext.links = links.collect();
+
+                    object.replace_path(link.link);
+                    assert!(self
+                        .objects_mut()
+                        .insert_full(object_id, object, ext)
+                        .is_none());
+                    assert_matches!(
+                        self.packages_mut().insert_child(&target, object_id),
+                        Some(true)
+                    );
+                }
+            }
+
+            fs::remove_dir_all(root).context(IoSnafu)?;
+        }
+
+        Ok(to_remove)
     }
 
     // TODO maybe flush just after every io operation
@@ -401,11 +454,9 @@ mod tests {
         let mut store = store_create_at_path(&path);
         let one = pkg("one", &one_path);
         let two = pkg("two", &two_path);
-        let one_id = one.id;
-        let two_id = two.id;
 
+        let two_id = two.id;
         let one_req = to_req(&one);
-        let two_req = to_req(&two);
 
         store.insert(one, one_path).unwrap();
         store.insert(two, two_path).unwrap();
@@ -417,8 +468,8 @@ mod tests {
 
         let removed = store.remove_unused(&mut user_manager).unwrap();
 
-        // assert_eq!(removed.len(), 1);
-        // assert!(removed.get(&hash_two).is_some());
+        assert_eq!(removed.len(), 1);
+        assert!(removed.contains(&two_id));
     }
 
     #[test]

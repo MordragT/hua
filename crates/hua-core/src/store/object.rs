@@ -78,6 +78,14 @@ impl Object {
         }
     }
 
+    pub fn replace_path(&mut self, path: RelativePathBuf) -> RelativePathBuf {
+        match self {
+            Self::Link(_) => todo!(),
+            Self::Tree(tree) => std::mem::replace(&mut tree.path, path),
+            Self::Blob(blob) => std::mem::replace(&mut blob.path, path),
+        }
+    }
+
     pub fn to_path<P: AsRef<Path>>(&self, base: P) -> PathBuf {
         match &self {
             Self::Tree(tree) => tree.to_path(base),
@@ -188,11 +196,14 @@ pub struct ObjectExt {
 }
 
 impl ObjectExt {
-    pub fn new(package_id: PackageId) -> Self {
+    pub fn new() -> Self {
         Self {
             links: HashMap::new(),
             // package_id,
         }
+    }
+    pub fn with_links(links: HashMap<PackageId, Link>) -> Self {
+        Self { links }
     }
 }
 
@@ -265,19 +276,30 @@ impl Objects {
     pub fn remove_objects<'a>(
         &'a mut self,
         ids: impl IntoIterator<Item = &'a ObjectId> + 'a,
-    ) -> impl Iterator<Item = Option<(Object, ObjectExt)>> + 'a {
+    ) -> impl Iterator<Item = Option<(ObjectId, Object, ObjectExt)>> + 'a {
         ids.into_iter().map(|id| {
             let object = self.nodes.remove(id);
             let ext = self.extensions.remove(id);
 
             if let Some(object) = object && let Some(ext) = ext {
-                Some((object, ext))
+                Some((*id, object, ext))
             } else {
                 None
             }
         })
     }
 
+    pub unsafe fn remove_objects_unchecked<'a>(
+        &'a mut self,
+        ids: impl IntoIterator<Item = &'a ObjectId> + 'a,
+    ) -> impl Iterator<Item = (ObjectId, Object, ObjectExt)> + 'a {
+        ids.into_iter().map(|id| {
+            let object = self.nodes.remove(id);
+            let ext = self.extensions.remove(id);
+
+            (*id, object.unwrap_unchecked(), ext.unwrap_unchecked())
+        })
+    }
     pub fn read_objects<'a, P, R>(
         &'a self,
         ids: impl IntoIterator<Item = &'a ObjectId> + 'a,
@@ -306,21 +328,28 @@ impl Objects {
         })
     }
 
-    pub fn insert(
-        &mut self,
-        package_id: PackageId,
-        object_id: ObjectId,
-        object: Object,
-    ) -> Option<Object> {
+    pub fn insert(&mut self, object_id: ObjectId, object: Object) -> Option<Object> {
         if let Some(old) = self.nodes.insert(object_id, object) {
             Some(old)
         } else {
-            self.extensions
-                .insert(object_id, ObjectExt::new(package_id));
+            self.extensions.insert(object_id, ObjectExt::new());
             None
         }
     }
 
+    pub fn insert_full(
+        &mut self,
+        object_id: ObjectId,
+        object: Object,
+        ext: ObjectExt,
+    ) -> Option<Object> {
+        if let Some(old) = self.nodes.insert(object_id, object) {
+            Some(old)
+        } else {
+            self.extensions.insert(object_id, ext);
+            None
+        }
+    }
     // pub fn get_foreign_links<'a>(
     //     &'a self,
     //     package_id: &'a PackageId,

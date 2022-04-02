@@ -151,6 +151,14 @@ impl Packages {
         self.nodes.insert(id, desc)
     }
 
+    pub fn insert_child(&mut self, id: &PackageId, child: ObjectId) -> Option<bool> {
+        if let Some(children) = self.children.get_mut(id) {
+            Some(children.insert(child))
+        } else {
+            None
+        }
+    }
+
     pub fn get(&self, id: &PackageId) -> Option<&PackageDesc> {
         self.nodes.get(id)
     }
