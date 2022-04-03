@@ -1,7 +1,7 @@
 use crate::{extra::path::ComponentPathBuf, UserManager};
 use std::{
     assert_matches::assert_matches,
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     fs::{self},
     os::unix,
     path::{Path, PathBuf},

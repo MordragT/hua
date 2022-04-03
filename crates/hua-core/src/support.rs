@@ -32,7 +32,7 @@ pub fn pkg_req_ver_prov<P: AsRef<Path>>(
 
     Package::new(
         root,
-        name,
+        name.to_owned(),
         Version::parse(version).unwrap(),
         trees,
         blobs,

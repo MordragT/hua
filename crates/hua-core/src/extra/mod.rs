@@ -1,6 +1,4 @@
-use reqwest::Url;
 use semver::{Comparator, Op, Version, VersionReq};
-use std::path::PathBuf;
 
 pub mod fs;
 pub mod hash;
@@ -8,22 +6,22 @@ pub mod mem;
 pub mod path;
 pub mod persist;
 
-pub struct Remote<T> {
-    pub data: T,
-    pub source: Url,
-}
+// pub struct Remote<T> {
+//     pub data: T,
+//     pub source: Url,
+// }
 
-impl<T> Remote<T> {
-    pub fn new(data: T, source: Url) -> Self {
-        Self { data, source }
-    }
-}
+// impl<T> Remote<T> {
+//     pub fn new(data: T, source: Url) -> Self {
+//         Self { data, source }
+//     }
+// }
 
-#[derive(Debug)]
-pub enum Source {
-    Local { path: PathBuf, checksum: u64 },
-    Http { url: Url, checksum: u64 },
-}
+// #[derive(Debug)]
+// pub enum Source {
+//     Local { path: PathBuf, checksum: u64 },
+//     Http { url: Url, checksum: u64 },
+// }
 
 pub fn exact_version_req(v: Version) -> VersionReq {
     VersionReq {

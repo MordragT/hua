@@ -5,10 +5,10 @@
 
 // mod cache;
 pub mod dependency;
-mod download;
-mod error;
+// mod error;
 pub mod extra;
 mod generation;
+mod jail;
 mod recipe;
 mod store;
 mod support;
@@ -16,8 +16,7 @@ mod user;
 
 // pub use cache::CacheClient;
 pub use dependency::{DependencyGraph, Requirement};
-pub use download::Downloader;
-pub use error::Error;
+// pub use error::Error;
 pub use generation::*;
 pub use recipe::Recipe;
 pub use semver::{Version, VersionReq};

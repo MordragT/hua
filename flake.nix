@@ -43,6 +43,7 @@
         ])
         openssl
         pkgconfig
+        bubblewrap
       ];
     };
   });

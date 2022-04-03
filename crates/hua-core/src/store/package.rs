@@ -68,7 +68,7 @@ impl Package {
     /// Creates a new package
     pub fn new(
         id: PackageId,
-        name: &str,
+        name: String,
         version: Version,
         trees: BTreeMap<ObjectId, Tree>,
         blobs: BTreeMap<ObjectId, Blob>,
@@ -76,7 +76,7 @@ impl Package {
     ) -> Self {
         Self {
             id,
-            name: name.to_owned(),
+            name,
             version,
             trees,
             blobs,
@@ -171,6 +171,18 @@ impl Packages {
         self.children.get(id)
     }
 
+    pub fn find_children_by_requirement(
+        &self,
+        requirement: &Requirement,
+    ) -> Option<&HashSet<ObjectId>> {
+        if let Some((id, _desc)) = self.find_by_requirement(requirement) {
+            let children = unsafe { self.get_children(id).unwrap_unchecked() };
+            Some(children)
+        } else {
+            None
+        }
+    }
+
     pub fn remove(&mut self, id: &PackageId) -> Option<(PackageDesc, HashSet<ObjectId>)> {
         let desc = self.nodes.remove(id);
         let children = self.children.remove(id);
@@ -186,13 +198,9 @@ impl Packages {
         &'a self,
         requirement: &'a Requirement,
     ) -> impl Iterator<Item = (&PackageId, &'a PackageDesc)> {
-        self.nodes.iter().filter_map(|(id, desc)| {
-            if desc.matches(requirement) {
-                Some((id, desc))
-            } else {
-                None
-            }
-        })
+        self.nodes
+            .iter()
+            .filter(|(_id, desc)| desc.matches(requirement))
     }
 
     pub fn path_in_store<P: AsRef<Path>>(&self, id: &PackageId, store_path: P) -> Option<PathBuf> {
@@ -219,6 +227,15 @@ impl Packages {
 
     pub fn find_by_name(&self, name: &str) -> Option<(&PackageId, &PackageDesc)> {
         self.find(|_id, p| p.name == name)
+    }
+
+    pub fn find_by_requirement(
+        &self,
+        requirement: &Requirement,
+    ) -> Option<(&PackageId, &PackageDesc)> {
+        self.nodes
+            .iter()
+            .find(|(_id, desc)| desc.matches(requirement))
     }
 
     pub fn find<P: Fn(&PackageId, &PackageDesc) -> bool>(

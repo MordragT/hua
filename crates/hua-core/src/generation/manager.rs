@@ -15,7 +15,7 @@ pub struct GenerationManager {
     path: PathBuf,
     counter: usize,
     current: usize,
-    list: HashMap<usize, Generation>,
+    generations: HashMap<usize, Generation>,
     global_links: HashSet<PathBuf>,
 }
 
@@ -37,7 +37,7 @@ impl GenerationManager {
             path,
             current,
             counter: 0,
-            list,
+            generations: list,
             global_links: HashSet::new(),
         })
     }
@@ -55,7 +55,7 @@ impl GenerationManager {
     }
 
     fn link_global(&mut self, id: usize, global_paths: &ComponentPathBuf) -> GenerationResult<()> {
-        let gen = self.list.get(&id).context(NotFoundSnafu { id })?;
+        let gen = self.generations.get(&id).context(NotFoundSnafu { id })?;
         self.global_links = extra::fs::link_component_paths(gen.component_paths(), global_paths)
             .context(IoSnafu)?;
         Ok(())
@@ -74,7 +74,7 @@ impl GenerationManager {
         if id == self.current {
             Err(GenerationError::InUse { id })
         } else {
-            match self.list.remove(&id) {
+            match self.generations.remove(&id) {
                 Some(gen) => {
                     fs::remove_dir_all(gen.path()).context(IoSnafu)?;
                     Ok(true)
@@ -103,7 +103,7 @@ impl GenerationManager {
                 .resolve(store)?
                 .build(store)?;
 
-            let old = self.list.insert(self.counter, generation);
+            let old = self.generations.insert(self.counter, generation);
             assert!(old.is_none());
 
             self.current = self.counter;
@@ -128,7 +128,7 @@ impl GenerationManager {
                 .resolve(store)?
                 .build(store)?;
 
-            let old = self.list.insert(self.counter, generation);
+            let old = self.generations.insert(self.counter, generation);
             assert!(old.is_none());
 
             self.current = self.counter;
@@ -139,7 +139,7 @@ impl GenerationManager {
     }
 
     pub fn packages(&self) -> impl Iterator<Item = &PackageId> {
-        self.list
+        self.generations
             .iter()
             .flat_map(|(_id, gen)| gen.packages().iter())
     }
@@ -153,13 +153,13 @@ impl GenerationManager {
     }
 
     pub fn list_generations(&self) {
-        for (key, gen) in self.list.iter() {
+        for (key, gen) in self.generations.iter() {
             println!("Generation {}\n{}\n", key, gen);
         }
     }
 
     pub fn switch_to(&mut self, id: usize) -> GenerationResult<()> {
-        if self.list.contains_key(&id) {
+        if self.generations.contains_key(&id) {
             self.current = id;
 
             Ok(())
@@ -169,6 +169,6 @@ impl GenerationManager {
     }
 
     fn get_current(&self) -> &Generation {
-        unsafe { self.list.get(&self.current).unwrap_unchecked() }
+        unsafe { self.generations.get(&self.current).unwrap_unchecked() }
     }
 }
