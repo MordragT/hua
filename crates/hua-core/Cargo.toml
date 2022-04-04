@@ -23,3 +23,4 @@ walkdir = "2"
 fs_extra = "1.2"
 cached-path = "0.5"
 is_executable = "1.0"
+os_type = { git = "https://github.com/MordragT/os_type" }

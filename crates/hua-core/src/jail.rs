@@ -78,6 +78,7 @@ impl Bind {
 
 #[derive(Debug, Default)]
 pub struct JailBuilder<'a> {
+    args: Vec<&'a str>,
     binds: Vec<Bind>,
     envs: Vec<(&'a str, &'a str)>,
     envs_remove: Vec<(&'a str, &'a str)>,
@@ -88,6 +89,14 @@ pub struct JailBuilder<'a> {
 impl<'a> JailBuilder<'a> {
     pub fn new() -> Self {
         Self::default()
+    }
+    pub fn arg(mut self, arg: &'a str) -> Self {
+        self.args.push(arg);
+        self
+    }
+    pub fn args(mut self, args: impl IntoIterator<Item = &'a str>) -> Self {
+        self.args.extend(args);
+        self
     }
     pub fn bind(mut self, bind: Bind) -> Self {
         self.binds.push(bind);
@@ -113,7 +122,7 @@ impl<'a> JailBuilder<'a> {
         self.current_dir = Some(dir.as_ref().to_owned());
         self
     }
-    pub fn build<'b>(self) -> Jail<'b> {
+    pub fn run(self) -> io::Result<Child> {
         let mut bwrap = Command::new("bwrap");
 
         if self.env_clear {
@@ -136,32 +145,10 @@ impl<'a> JailBuilder<'a> {
             bwrap.arg("--chdir").arg(dir);
         }
 
-        Jail {
-            bwrap,
-            args: Vec::new(),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Jail<'a> {
-    bwrap: Command,
-    args: Vec<&'a str>,
-}
-
-impl<'a> Jail<'a> {
-    pub fn run(&mut self) -> io::Result<Child> {
         for arg in &self.args {
-            self.bwrap.arg(arg);
+            bwrap.arg(arg);
         }
-        self.bwrap.spawn()
-    }
-    pub fn arg(&mut self, arg: &'a str) -> &mut Self {
-        self.args.push(arg);
-        self
-    }
-    pub fn args(&mut self, args: impl IntoIterator<Item = &'a str>) -> &mut Self {
-        self.args.extend(args);
-        self
+
+        bwrap.spawn()
     }
 }

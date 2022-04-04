@@ -108,7 +108,9 @@ impl<B: Backend> Store<B> {
         let Package {
             id: package_id,
             name,
+            desc,
             version,
+            licenses,
             requires,
             blobs,
             trees,
@@ -185,7 +187,7 @@ impl<B: Backend> Store<B> {
                 .packages_mut()
                 .insert(
                     package_id,
-                    PackageDesc::new(name, version, pkg_blobs, requires),
+                    PackageDesc::new(name, desc, version, licenses, pkg_blobs, requires),
                     object_ids
                 )
                 .is_none());

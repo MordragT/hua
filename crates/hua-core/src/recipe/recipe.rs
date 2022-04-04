@@ -1,11 +1,12 @@
 use super::*;
 use crate::{
     extra::hash::PackageHash,
-    jail::{Bind, Jail, JailBuilder},
+    jail::{Bind, JailBuilder},
     store::Backend,
     GenerationBuilder, Package, Requirement, Store,
 };
 use cached_path::{Cache, Options};
+use os_type::OSType;
 use relative_path::RelativePathBuf;
 use semver::Version;
 use std::{collections::HashSet, path::PathBuf};
@@ -18,16 +19,15 @@ use temp_dir::TempDir;
 pub struct Recipe<'a> {
     name: String,
     version: Version,
-    description: String,
-    archictures: u8,
+    desc: String,
+    archs: u8,
     platforms: u8,
     source: &'a str,
-    license: Vec<String>,
+    licenses: Vec<String>,
     requires: HashSet<Requirement>,
     requires_build: HashSet<Requirement>,
     target_dir: RelativePathBuf,
-    // output: Option<Vec<PathBuf>>,
-    jail: Option<Jail<'a>>,
+    jail: Option<JailBuilder<'a>>,
     build_generation_dir: Option<TempDir>,
     build_dir: Option<PathBuf>,
 }
@@ -37,11 +37,11 @@ impl<'a> Recipe<'a> {
     pub fn new(
         name: String,
         version: Version,
-        description: String,
+        desc: String,
         archictures: u8,
         platforms: u8,
         source: &'a str,
-        license: Vec<String>,
+        licenses: Vec<String>,
         requires: HashSet<Requirement>,
         requires_build: HashSet<Requirement>,
         target_dir: RelativePathBuf,
@@ -49,15 +49,14 @@ impl<'a> Recipe<'a> {
         Self {
             name,
             version,
-            description,
-            archictures,
+            desc,
+            archs: archictures,
             platforms,
             source,
-            license,
+            licenses,
             requires,
             requires_build,
             target_dir,
-            // output: None,
             jail: None,
             build_generation_dir: None,
             build_dir: None,
@@ -69,7 +68,7 @@ impl<'a> Recipe<'a> {
     /// Downloads data if it is not local and verifies them.
     /// Must be called prior to unpacking even if the source is local
     pub fn fetch(mut self, cache: &Cache) -> RecipeResult<Self> {
-        if cfg!(target_arch = "x86_64") && self.archictures & X86_64 != X86_64 {
+        if cfg!(target_arch = "x86_64") && self.archs & X86_64 != X86_64 {
             return Err(RecipeError::IncompatibleArchitecture);
         }
         if cfg!(target_os = "linux") && self.platforms & LINUX != LINUX {
@@ -88,7 +87,11 @@ impl<'a> Recipe<'a> {
 
     /// Link all dependencies temporarily and processes binaries
     /// for execution in the build phase.
-    pub fn prepare_requirements<B: Backend>(mut self, store: &Store<B>) -> RecipeResult<Self> {
+    pub fn prepare_requirements<B: Backend>(
+        mut self,
+        store: &Store<B>,
+        vars: impl IntoIterator<Item = (&'a str, &'a str)>,
+    ) -> RecipeResult<Self> {
         let build_dir = self
             .build_dir
             .as_ref()
@@ -115,27 +118,33 @@ impl<'a> Recipe<'a> {
 
         let jail = JailBuilder::new()
             .bind(Bind::read_only("/bin", "/bin"))
-            .bind(Bind::read_only("/nix/store", "/nix/store"))
             .bind(Bind::read_only(&tmp_gen_paths.binary, "/usr/bin/"))
             .bind(Bind::read_only(&tmp_gen_paths.library, "/usr/lib/"))
             .bind(Bind::read_only(&tmp_gen_paths.share, "/usr/share/"))
             .bind(Bind::read_only(&tmp_gen_paths.config, "/etc/"))
             .bind(Bind::read_write(build_dir, "/tmp/build/"))
-            .current_dir("/tmp/build/")
-            .build();
+            .envs(vars)
+            .current_dir("/tmp/build/");
+
+        let jail = match os_type::current_platform().os_type {
+            OSType::NixOS => jail.bind(Bind::read_only("/nix/store", "/nix/store")),
+            _ => todo!(),
+        };
 
         self.build_generation_dir = Some(build_generation_dir);
         self.jail = Some(jail);
         Ok(self)
     }
 
+    // TODO create symlink to builded package inside cwd and create pacakge.lock
+
     /// Builds the recipe.
     /// In here external programs like cargo or make are run.
     pub fn build(
-        mut self,
+        self,
         args: impl IntoIterator<Item = &'a str>,
     ) -> RecipeResult<(Package, PathBuf)> {
-        let jail = self.jail.as_mut().ok_or(RecipeError::MissingJail)?;
+        let jail = self.jail.ok_or(RecipeError::MissingJail)?;
         let build_dir = self.build_dir.ok_or(RecipeError::MissingSourceFiles)?;
 
         let mut process = jail.args(args).run().context(IoSnafu)?;
@@ -147,7 +156,16 @@ impl<'a> Recipe<'a> {
         let PackageHash { root, trees, blobs } =
             PackageHash::from_path(&absolute_target_dir, &self.name).context(IoSnafu)?;
 
-        let package = Package::new(root, self.name, self.version, trees, blobs, self.requires);
+        let package = Package::new(
+            root,
+            self.name,
+            self.desc,
+            self.version,
+            self.licenses,
+            trees,
+            blobs,
+            self.requires,
+        );
         Ok((package, absolute_target_dir))
     }
 }
@@ -201,7 +219,7 @@ mod tests {
         let (package, path) = recipe
             .fetch(&cache)
             .unwrap()
-            .prepare_requirements(&store)
+            .prepare_requirements(&store, [])
             .unwrap()
             .build(["sh", "-c", "ls"])
             .unwrap();

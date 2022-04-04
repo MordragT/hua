@@ -14,7 +14,9 @@ use super::{Blob, PackageId, Tree};
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
 pub struct PackageDesc {
     pub name: String,
+    pub desc: String,
     pub version: Version,
+    pub licenses: Vec<String>,
     pub blobs: BTreeSet<Blob>,
     pub requires: HashSet<Requirement>,
 }
@@ -22,13 +24,17 @@ pub struct PackageDesc {
 impl PackageDesc {
     pub fn new(
         name: String,
+        desc: String,
         version: Version,
+        licenses: Vec<String>,
         blobs: BTreeSet<Blob>,
         requires: HashSet<Requirement>,
     ) -> Self {
         Self {
             name,
+            desc,
             version,
+            licenses,
             blobs,
             requires,
         }
@@ -47,7 +53,9 @@ impl From<Package> for PackageDesc {
 
         Self {
             name: package.name,
+            desc: package.desc,
             version: package.version,
+            licenses: package.licenses,
             blobs,
             requires: package.requires,
         }
@@ -58,7 +66,9 @@ impl From<Package> for PackageDesc {
 pub struct Package {
     pub id: PackageId,
     pub name: String,
+    pub desc: String,
     pub version: Version,
+    pub licenses: Vec<String>,
     pub trees: BTreeMap<ObjectId, Tree>,
     pub blobs: BTreeMap<ObjectId, Blob>,
     pub requires: HashSet<Requirement>,
@@ -69,7 +79,9 @@ impl Package {
     pub fn new(
         id: PackageId,
         name: String,
+        desc: String,
         version: Version,
+        licenses: Vec<String>,
         trees: BTreeMap<ObjectId, Tree>,
         blobs: BTreeMap<ObjectId, Blob>,
         requires: HashSet<Requirement>,
@@ -77,7 +89,9 @@ impl Package {
         Self {
             id,
             name,
+            desc,
             version,
+            licenses,
             trees,
             blobs,
             requires,

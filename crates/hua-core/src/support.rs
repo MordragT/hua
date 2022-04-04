@@ -33,7 +33,9 @@ pub fn pkg_req_ver_prov<P: AsRef<Path>>(
     Package::new(
         root,
         name.to_owned(),
+        "Some package".to_owned(),
         Version::parse(version).unwrap(),
+        vec!["MIT".to_owned()],
         trees,
         blobs,
         requires.into_iter().collect(),
