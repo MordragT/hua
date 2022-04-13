@@ -16,3 +16,7 @@ run the package in a chrooted/sandboxed environment.
 - only root users can build a recipe into the store
 - we do that by pam
 - we do not need fakeroot, as packages have to be built into the store when distributing them and the store is always root only
+
+#### Why Roc ?
+
+- cited from rocs github: "A high-performance build tool (or text editor) written in Rust can be a Roc platform with a strong plugin security model. For example, it could expose only operations allowing plugin authors to modify the contents of certain files, rather than allowing plugins arbitrary read/write access to the entire filesystem."

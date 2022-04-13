@@ -1,0 +1,22 @@
+[package]
+name = "host"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+resolver = "2"
+
+links = "app"
+
+[lib]
+name = "host"
+path = "src/lib.rs"
+crate-type = ["staticlib", "rlib"]
+
+[[bin]]
+name = "host"
+path = "src/main.rs"
+
+[dependencies]
+libc = "0.2"
+hua-core = { path = "../hua-core" }
+roc_std = { path = "../../../roc/roc_std" }

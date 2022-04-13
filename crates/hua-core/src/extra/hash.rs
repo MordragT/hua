@@ -1,7 +1,7 @@
-use super::path;
+use super::{collections::OrdValTreeMap, path};
 use rs_merkle::{Hasher, MerkleTree};
 use std::{
-    collections::BTreeMap,
+    collections::HashMap,
     fs::File,
     io::{self, Read},
     path::Path,
@@ -48,15 +48,14 @@ impl Hasher for Blake3 {
 #[derive(Debug)]
 pub struct PackageHash {
     pub root: PackageId,
-    pub trees: BTreeMap<ObjectId, Tree>,
-    pub blobs: BTreeMap<ObjectId, Blob>,
+    pub trees: OrdValTreeMap<ObjectId, Tree>,
+    pub blobs: HashMap<ObjectId, Blob>,
 }
 
 impl PackageHash {
     pub fn from_path<P: AsRef<Path>>(path: P, package_name: &str) -> io::Result<Self> {
-        // let mut children = BTreeMap::new();
-        let mut trees = BTreeMap::new();
-        let mut blobs = BTreeMap::new();
+        let mut trees = OrdValTreeMap::new();
+        let mut blobs = HashMap::new();
 
         let mut tree = MerkleTree::<Blake3>::new();
         let mut dir_children: Vec<RawId> = Vec::new();

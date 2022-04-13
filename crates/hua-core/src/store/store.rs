@@ -1,7 +1,7 @@
 use crate::{extra::path::ComponentPathBuf, UserManager};
 use std::{
     assert_matches::assert_matches,
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     fs::{self},
     os::unix,
     path::{Path, PathBuf},
@@ -77,8 +77,8 @@ impl<B: Backend> Store<B> {
 
     fn solve_objects(
         id: ObjectId,
-        trees: &BTreeMap<ObjectId, Tree>,
-        blobs: &BTreeMap<ObjectId, Blob>,
+        trees: &HashMap<ObjectId, Tree>,
+        blobs: &HashMap<ObjectId, Blob>,
         resolved: &mut HashSet<ObjectId>,
     ) -> bool {
         if let Some(tree) = trees.get(&id) {
@@ -98,7 +98,9 @@ impl<B: Backend> Store<B> {
     /// Inserts a package into the store and returns true if the package was not present and was inserted
     /// and false if it was already present.
     pub fn insert<P: AsRef<Path>>(&mut self, package: Package, path: P) -> StoreResult<bool> {
-        if !package.verify(&path).context(IoSnafu)? {
+        let (verified, trees, blobs) = package.verify(&path).context(IoSnafu)?;
+
+        if !verified {
             return Err(StoreError::PackageNotVerified { package });
         }
 
@@ -112,8 +114,6 @@ impl<B: Backend> Store<B> {
             version,
             licenses,
             requires,
-            blobs,
-            trees,
         } = package;
 
         let mut pkg_blobs = BTreeSet::new();
@@ -122,34 +122,40 @@ impl<B: Backend> Store<B> {
             Ok(false)
         } else {
             let mut resolved = HashSet::new();
-            let mut object_ids = HashSet::new();
+            let mut object_ids: HashSet<ObjectId> = HashSet::new();
+
+            let trees_map = trees.indices;
 
             // should be ordered (by BTreeMap and Object::cmp) so that trees with lower depth come first
-            for (id, tree) in trees.iter() {
+            for (tree, id) in trees.tree.into_iter() {
                 let dest = tree.to_path(&path_in_store);
 
-                if resolved.contains(id) {
+                if resolved.contains(&id) {
                     continue;
                 } else if self.objects().contains(&id) {
                     let original = self
                         .get_full_object_path(&id)
-                        .ok_or(StoreError::ObjectNotFoundById { id: *id })?;
+                        .ok_or(StoreError::ObjectNotFoundById { id })?;
 
-                    unix::fs::symlink(original, dest).context(IoSnafu)?;
-                    Self::solve_objects(*id, &trees, &blobs, &mut resolved);
+                    unix::fs::symlink(&original, &dest).context(LinkObjectsSnafu {
+                        kind: ObjectKind::Tree,
+                        original,
+                        link: dest,
+                    })?;
+                    Self::solve_objects(id, &trees_map, &blobs, &mut resolved);
 
-                    let ext = unsafe { self.objects_mut().get_ext_mut_unchecked(id) };
+                    let ext = unsafe { self.objects_mut().get_ext_mut_unchecked(&id) };
                     assert!(ext
                         .links
-                        .insert(package_id, Link::new(tree.path.clone(), *id))
+                        .insert(package_id, Link::new(tree.path.clone(), id))
                         .is_none());
-                    object_ids.insert(*id);
+                    object_ids.insert(id);
                 } else {
-                    fs::create_dir(dest).context(IoSnafu)?;
+                    fs::create_dir(&dest).context(CreateTreeSnafu { path: dest })?;
 
-                    let old = self.objects_mut().insert(*id, tree.clone().into());
+                    let old = self.objects_mut().insert(id, tree.into());
                     assert!(old.is_none());
-                    object_ids.insert(*id);
+                    object_ids.insert(id);
                 }
             }
 
@@ -165,7 +171,11 @@ impl<B: Backend> Store<B> {
                         .get_full_object_path(&id)
                         .ok_or(StoreError::ObjectNotFoundById { id })?;
 
-                    unix::fs::symlink(original, dest).context(IoSnafu)?;
+                    unix::fs::symlink(&original, &dest).context(LinkObjectsSnafu {
+                        kind: ObjectKind::Blob,
+                        original,
+                        link: dest,
+                    })?;
 
                     let ext = unsafe { self.objects_mut().get_ext_mut_unchecked(&id) };
                     assert!(ext
@@ -175,7 +185,11 @@ impl<B: Backend> Store<B> {
                     object_ids.insert(id);
                 } else {
                     let source = blob.to_path(&path);
-                    fs::copy(source, dest).context(IoSnafu)?;
+                    fs::copy(&source, &dest).context(CopyObjectSnafu {
+                        kind: ObjectKind::Blob,
+                        src: source,
+                        dest,
+                    })?;
 
                     let old = self.objects_mut().insert(id, blob.into());
                     assert!(old.is_none());

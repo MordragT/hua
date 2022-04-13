@@ -1,10 +1,12 @@
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
+use crate::extra::collections::OrdValTreeMap;
 use crate::extra::hash::PackageHash;
 use crate::store::ObjectId;
 use crate::Requirement;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use serde_with::{serde_as, DisplayFromStr};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -17,6 +19,7 @@ pub struct PackageDesc {
     pub desc: String,
     pub version: Version,
     pub licenses: Vec<String>,
+    // TODO change to HashSet of ObjectIds
     pub blobs: BTreeSet<Blob>,
     pub requires: HashSet<Requirement>,
 }
@@ -45,11 +48,9 @@ impl PackageDesc {
             && requirement.name() == &self.name
             && requirement.version_req().matches(&self.version)
     }
-}
 
-impl From<Package> for PackageDesc {
-    fn from(package: Package) -> Self {
-        let blobs = package.blobs.into_iter().map(|(_id, blob)| blob).collect();
+    pub fn from_package(package: Package, blobs: impl IntoIterator<Item = Blob>) -> Self {
+        let blobs = blobs.into_iter().collect();
 
         Self {
             name: package.name,
@@ -62,16 +63,20 @@ impl From<Package> for PackageDesc {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[serde_as]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Package {
+    #[serde_as(as = "DisplayFromStr")]
     pub id: PackageId,
     pub name: String,
     pub desc: String,
     pub version: Version,
     pub licenses: Vec<String>,
-    pub trees: BTreeMap<ObjectId, Tree>,
-    pub blobs: BTreeMap<ObjectId, Blob>,
     pub requires: HashSet<Requirement>,
+    // #[serde_as(as = "BTreeMap<DisplayFromStr, _>")]
+    // pub trees: BTreeMap<ObjectId, Tree>,
+    // #[serde_as(as = "BTreeMap<DisplayFromStr, _>")]
+    // pub blobs: BTreeMap<ObjectId, Blob>,
 }
 
 impl Package {
@@ -82,8 +87,8 @@ impl Package {
         desc: String,
         version: Version,
         licenses: Vec<String>,
-        trees: BTreeMap<ObjectId, Tree>,
-        blobs: BTreeMap<ObjectId, Blob>,
+        // trees: BTreeMap<ObjectId, Tree>,
+        // blobs: BTreeMap<ObjectId, Blob>,
         requires: HashSet<Requirement>,
     ) -> Self {
         Self {
@@ -92,8 +97,8 @@ impl Package {
             desc,
             version,
             licenses,
-            trees,
-            blobs,
+            // trees,
+            // blobs,
             requires,
         }
     }
@@ -114,14 +119,13 @@ impl Package {
     //     &self.requires
     // }
 
-    pub fn verify<P: AsRef<Path>>(&self, path: P) -> io::Result<bool> {
-        let PackageHash {
-            root,
-            trees: _,
-            blobs: _,
-        } = PackageHash::from_path(path, &self.name)?;
+    pub fn verify<P: AsRef<Path>>(
+        &self,
+        path: P,
+    ) -> io::Result<(bool, OrdValTreeMap<ObjectId, Tree>, HashMap<ObjectId, Blob>)> {
+        let PackageHash { root, trees, blobs } = PackageHash::from_path(path, &self.name)?;
 
-        Ok(self.id == root)
+        Ok((self.id == root, trees, blobs))
     }
 
     pub fn path_in_store<P: AsRef<Path>>(&self, store_path: P) -> PathBuf {

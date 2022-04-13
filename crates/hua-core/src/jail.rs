@@ -56,9 +56,9 @@ impl Bind {
             path: path.as_ref().to_owned(),
         }
     }
-    pub fn file<P: AsRef<Path>>(content: &str, path: P) -> Self {
+    pub fn file<C: AsRef<str>, P: AsRef<Path>>(content: C, path: P) -> Self {
         Self::File {
-            content: content.to_owned(),
+            content: content.as_ref().to_owned(),
             path: path.as_ref().to_owned(),
         }
     }
@@ -77,41 +77,50 @@ impl Bind {
 }
 
 #[derive(Debug, Default)]
-pub struct JailBuilder<'a> {
-    args: Vec<&'a str>,
+pub struct JailBuilder {
+    args: Vec<String>,
     binds: Vec<Bind>,
-    envs: Vec<(&'a str, &'a str)>,
-    envs_remove: Vec<(&'a str, &'a str)>,
+    envs: Vec<(String, String)>,
+    envs_remove: Vec<(String, String)>,
     env_clear: bool,
     current_dir: Option<PathBuf>,
 }
 
-impl<'a> JailBuilder<'a> {
+impl JailBuilder {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn arg(mut self, arg: &'a str) -> Self {
-        self.args.push(arg);
+    pub fn arg<A: AsRef<str>>(mut self, arg: A) -> Self {
+        self.args.push(arg.as_ref().to_owned());
         self
     }
-    pub fn args(mut self, args: impl IntoIterator<Item = &'a str>) -> Self {
-        self.args.extend(args);
+    pub fn args<A: AsRef<str>>(mut self, args: impl IntoIterator<Item = A>) -> Self {
+        self.args
+            .extend(args.into_iter().map(|a| a.as_ref().to_owned()));
         self
     }
     pub fn bind(mut self, bind: Bind) -> Self {
         self.binds.push(bind);
         self
     }
-    pub fn env(mut self, variable: &'a str, value: &'a str) -> Self {
-        self.envs.push((variable, value));
+    pub fn env<L: AsRef<str>, R: AsRef<str>>(mut self, variable: L, value: R) -> Self {
+        self.envs
+            .push((variable.as_ref().to_owned(), value.as_ref().to_owned()));
         self
     }
-    pub fn envs(mut self, vars: impl IntoIterator<Item = (&'a str, &'a str)>) -> Self {
-        self.envs.extend(vars);
+    pub fn envs<L: AsRef<str>, R: AsRef<str>>(
+        mut self,
+        vars: impl IntoIterator<Item = (L, R)>,
+    ) -> Self {
+        self.envs.extend(
+            vars.into_iter()
+                .map(|(var, val)| (var.as_ref().to_owned(), val.as_ref().to_owned())),
+        );
         self
     }
-    pub fn env_remove(mut self, variable: &'a str, value: &'a str) -> Self {
-        self.envs_remove.push((variable, value));
+    pub fn env_remove<L: AsRef<str>, R: AsRef<str>>(mut self, variable: L, value: R) -> Self {
+        self.envs_remove
+            .push((variable.as_ref().to_owned(), value.as_ref().to_owned()));
         self
     }
     pub fn env_clear(mut self, clear: bool) -> Self {

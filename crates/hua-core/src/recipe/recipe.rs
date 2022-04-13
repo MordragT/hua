@@ -3,36 +3,45 @@ use crate::{
     extra::hash::PackageHash,
     jail::{Bind, JailBuilder},
     store::Backend,
-    GenerationBuilder, Package, Requirement, Store,
+    GenerationBuilder, Package, Requirement, Store, STORE_PATH,
 };
 use cached_path::{Cache, Options};
+use fs_extra::dir::CopyOptions;
 use os_type::OSType;
 use relative_path::RelativePathBuf;
 use semver::Version;
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::HashSet,
+    fs::{self, File},
+    io::Write,
+    path::PathBuf,
+};
 use temp_dir::TempDir;
 
 // TODO: implement patches, allow multiple sources ?
 
+pub const BUILD_PATH: &str = "/tmp/build/";
+pub const BUILD_SCRIPT_PATH: &str = "/tmp/build/build.sh";
+
 /// A Recipe to build an Package from.
 #[derive(Debug)]
-pub struct Recipe<'a> {
+pub struct Recipe {
     name: String,
     version: Version,
     desc: String,
     archs: u8,
     platforms: u8,
-    source: &'a str,
+    source: String,
     licenses: Vec<String>,
     requires: HashSet<Requirement>,
     requires_build: HashSet<Requirement>,
     target_dir: RelativePathBuf,
-    jail: Option<JailBuilder<'a>>,
+    jail: Option<JailBuilder>,
     build_generation_dir: Option<TempDir>,
     build_dir: Option<PathBuf>,
 }
 
-impl<'a> Recipe<'a> {
+impl Recipe {
     /// Creates a new Recipe.
     pub fn new(
         name: String,
@@ -40,7 +49,7 @@ impl<'a> Recipe<'a> {
         desc: String,
         archictures: u8,
         platforms: u8,
-        source: &'a str,
+        source: String,
         licenses: Vec<String>,
         requires: HashSet<Requirement>,
         requires_build: HashSet<Requirement>,
@@ -68,18 +77,24 @@ impl<'a> Recipe<'a> {
     /// Downloads data if it is not local and verifies them.
     /// Must be called prior to unpacking even if the source is local
     pub fn fetch(mut self, cache: &Cache) -> RecipeResult<Self> {
-        if cfg!(target_arch = "x86_64") && self.archs & X86_64 != X86_64 {
-            return Err(RecipeError::IncompatibleArchitecture);
-        }
-        if cfg!(target_os = "linux") && self.platforms & LINUX != LINUX {
-            return Err(RecipeError::IncompatiblePlatform);
-        }
+        super::check_archs(self.archs)?;
+        super::check_platforms(self.platforms)?;
 
         let path = cache
             .cached_path_with_options(&self.source, &Options::default().extract())
             .context(CacheSnafu)?;
 
-        self.build_dir = Some(path);
+        let build_dir = PathBuf::from("build");
+        if build_dir.exists() {
+            fs::remove_dir_all(&build_dir).context(IoSnafu)?;
+        }
+
+        let mut copy_options = CopyOptions::default();
+        copy_options.copy_inside = true;
+        copy_options.skip_exist = true;
+        fs_extra::dir::copy(path, &build_dir, &copy_options).context(FsExtraSnafu)?;
+
+        self.build_dir = Some(build_dir);
         Ok(self)
     }
 
@@ -87,10 +102,10 @@ impl<'a> Recipe<'a> {
 
     /// Link all dependencies temporarily and processes binaries
     /// for execution in the build phase.
-    pub fn prepare_requirements<B: Backend>(
+    pub fn prepare_requirements<B: Backend, L: AsRef<str>, R: AsRef<str>>(
         mut self,
         store: &Store<B>,
-        vars: impl IntoIterator<Item = (&'a str, &'a str)>,
+        vars: impl IntoIterator<Item = (L, R)>,
     ) -> RecipeResult<Self> {
         let build_dir = self
             .build_dir
@@ -118,13 +133,14 @@ impl<'a> Recipe<'a> {
 
         let jail = JailBuilder::new()
             .bind(Bind::read_only("/bin", "/bin"))
+            .bind(Bind::read_only(STORE_PATH, STORE_PATH))
             .bind(Bind::read_only(&tmp_gen_paths.binary, "/usr/bin/"))
             .bind(Bind::read_only(&tmp_gen_paths.library, "/usr/lib/"))
             .bind(Bind::read_only(&tmp_gen_paths.share, "/usr/share/"))
             .bind(Bind::read_only(&tmp_gen_paths.config, "/etc/"))
-            .bind(Bind::read_write(build_dir, "/tmp/build/"))
+            .bind(Bind::read_write(build_dir, BUILD_PATH))
             .envs(vars)
-            .current_dir("/tmp/build/");
+            .current_dir(BUILD_PATH);
 
         let jail = match os_type::current_platform().os_type {
             OSType::NixOS => jail.bind(Bind::read_only("/nix/store", "/nix/store")),
@@ -136,25 +152,30 @@ impl<'a> Recipe<'a> {
         Ok(self)
     }
 
-    // TODO create symlink to builded package inside cwd and create pacakge.lock
-
     /// Builds the recipe.
     /// In here external programs like cargo or make are run.
-    pub fn build(
-        self,
-        args: impl IntoIterator<Item = &'a str>,
-    ) -> RecipeResult<(Package, PathBuf)> {
+    pub fn build(self, script: String) -> RecipeResult<(Package, PathBuf)> {
         let jail = self.jail.ok_or(RecipeError::MissingJail)?;
         let build_dir = self.build_dir.ok_or(RecipeError::MissingSourceFiles)?;
 
-        let mut process = jail.args(args).run().context(IoSnafu)?;
+        let mut process = jail
+            .bind(Bind::file(script, BUILD_SCRIPT_PATH))
+            .arg("sh")
+            .arg(BUILD_SCRIPT_PATH)
+            .run()
+            .context(IoSnafu)?;
         let ecode = process.wait().context(IoSnafu)?;
         assert!(ecode.success());
 
-        let absolute_target_dir = self.target_dir.to_path(build_dir);
+        let absolute_target_dir = self
+            .target_dir
+            .to_path(build_dir.canonicalize().context(IoSnafu)?);
 
-        let PackageHash { root, trees, blobs } =
-            PackageHash::from_path(&absolute_target_dir, &self.name).context(IoSnafu)?;
+        let PackageHash {
+            root,
+            trees: _,
+            blobs: _,
+        } = PackageHash::from_path(&absolute_target_dir, &self.name).context(IoSnafu)?;
 
         let package = Package::new(
             root,
@@ -162,10 +183,18 @@ impl<'a> Recipe<'a> {
             self.desc,
             self.version,
             self.licenses,
-            trees,
-            blobs,
             self.requires,
         );
+
+        let toml = toml::to_vec(&package).context(TomlSerilizationSnafu)?;
+
+        let lock_path = PathBuf::from(format!("{}.lock", &package.name));
+        if lock_path.exists() {
+            fs::remove_file(&lock_path).context(IoSnafu)?;
+        }
+        let mut lock = File::create(lock_path).context(IoSnafu)?;
+        lock.write_all(&toml).context(IoSnafu)?;
+
         Ok((package, absolute_target_dir))
     }
 }
@@ -180,18 +209,19 @@ mod tests {
     use temp_dir::TempDir;
 
     use crate::{
-        recipe::{LINUX, X86_64},
+        recipe::{LINUX, X86, X86_64},
         store::LocalBackend,
         Recipe, Store,
     };
 
     #[test]
     fn recipe_automake() {
-        let name = "automake";
+        let name = "automake".to_owned();
         let version = Version::new(1, 16, 4);
         let description = String::new();
-        let archictures = X86_64;
+        let archictures = X86_64 | X86;
         let platforms = LINUX;
+        // TODO checksum
         let source = format!("https://ftp.gnu.org/gnu/automake/automake-{version}.tar.gz");
         let license = vec!["GPLv2".to_owned()];
         let requires = HashSet::new();
@@ -199,12 +229,12 @@ mod tests {
         let target_dir = RelativePathBuf::from_path(format!("{name}-{version}")).unwrap();
 
         let recipe = Recipe::new(
-            name.to_owned(),
+            name,
             version,
             description,
             archictures,
             platforms,
-            &source,
+            source,
             license,
             requires,
             requires_build,
@@ -213,18 +243,20 @@ mod tests {
 
         let temp_dir = TempDir::new().unwrap();
         let store_path = temp_dir.child("store");
-        let store = Store::<LocalBackend>::init(store_path).unwrap();
+        let mut store = Store::<LocalBackend>::init(store_path).unwrap();
         let cache = CacheBuilder::new().build().unwrap();
+
+        let recipe_path = temp_dir.child("recipe");
+        std::env::set_current_dir(recipe_path).unwrap();
 
         let (package, path) = recipe
             .fetch(&cache)
             .unwrap()
-            .prepare_requirements(&store, [])
+            .prepare_requirements::<LocalBackend, &str, &str>(&store, [])
             .unwrap()
-            .build(["sh", "-c", "ls"])
+            .build("ls".to_owned())
             .unwrap();
 
-        dbg!(package);
-        dbg!(path);
+        assert!(store.insert(package, path).unwrap());
     }
 }

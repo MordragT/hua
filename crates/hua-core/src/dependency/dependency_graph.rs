@@ -270,7 +270,6 @@ mod tests {
         let indices = graph.resolve(reqs, &store).unwrap();
 
         assert_eq!(4, indices.count());
-        println!("Graph: {graph:?}");
     }
 
     #[test]

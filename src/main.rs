@@ -1,7 +1,7 @@
 use std::{error::Error, fs};
 
 use clap::{arg, Command};
-use hua_core::{ComponentPaths, Package, Store, UserManager, Version};
+use hua_core::{Package, Store, UserManager, Version};
 
 const HUA_PATH: &str = "hua";
 const STORE_PATH: &str = "hua/store";

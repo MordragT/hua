@@ -27,6 +27,25 @@ pub enum StoreError {
     NotExisting { path: PathBuf },
     #[snafu(display("IoError: {source}"))]
     IoError { source: std::io::Error },
+    #[snafu(display("Could not link store objects from {original:#?} to {link:#?}: {source}"))]
+    LinkObjectsError {
+        kind: ObjectKind,
+        original: PathBuf,
+        link: PathBuf,
+        source: std::io::Error,
+    },
+    #[snafu(display("Could not copy object from {src:#?} to {dest:#?}: {source}"))]
+    CopyObjectError {
+        kind: ObjectKind,
+        src: PathBuf,
+        dest: PathBuf,
+        source: std::io::Error,
+    },
+    #[snafu(display("Could not create tree at {path:#?}: {source}"))]
+    CreateTreeError {
+        path: PathBuf,
+        source: std::io::Error,
+    },
     #[snafu(display("FsExtraError: {source}"))]
     FsExtraError { source: fs_extra::error::Error },
     #[snafu(display("Waldir Error: {source}"))]

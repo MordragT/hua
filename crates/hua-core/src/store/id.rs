@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{fmt, ops::Deref};
+use std::{array::TryFromSliceError, fmt, ops::Deref, str::FromStr};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct RawId([u8; 32]);
@@ -91,6 +91,15 @@ impl TryFrom<Vec<u8>> for PackageId {
     }
 }
 
+impl TryFrom<&[u8]> for PackageId {
+    type Error = TryFromSliceError;
+
+    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
+        let hash = <[u8; 32]>::try_from(slice)?;
+        Ok(PackageId(RawId(hash)))
+    }
+}
+
 impl From<RawId> for PackageId {
     fn from(id: RawId) -> Self {
         PackageId(id)
@@ -101,6 +110,15 @@ impl Deref for PackageId {
     type Target = RawId;
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl FromStr for PackageId {
+    type Err = TryFromSliceError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let hash = <[u8; 32]>::try_from(s.as_bytes())?;
+        Ok(PackageId(RawId(hash)))
     }
 }
 
@@ -158,6 +176,15 @@ impl TryFrom<Vec<u8>> for ObjectId {
     }
 }
 
+impl TryFrom<&[u8]> for ObjectId {
+    type Error = TryFromSliceError;
+
+    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
+        let hash = <[u8; 32]>::try_from(slice)?;
+        Ok(ObjectId(RawId(hash)))
+    }
+}
+
 impl From<RawId> for ObjectId {
     fn from(id: RawId) -> Self {
         ObjectId(id)
@@ -168,5 +195,14 @@ impl Deref for ObjectId {
     type Target = RawId;
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl FromStr for ObjectId {
+    type Err = TryFromSliceError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let hash = <[u8; 32]>::try_from(s.as_bytes())?;
+        Ok(ObjectId(RawId(hash)))
     }
 }

@@ -1,5 +1,6 @@
 use semver::{Comparator, Op, Version, VersionReq};
 
+pub mod collections;
 pub mod fs;
 pub mod hash;
 pub mod mem;

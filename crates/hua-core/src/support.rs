@@ -28,7 +28,11 @@ pub fn pkg_req_ver_prov<P: AsRef<Path>>(
 
     let _lib = File::create(&lib_path).unwrap();
 
-    let PackageHash { root, trees, blobs } = PackageHash::from_path(path, name).unwrap();
+    let PackageHash {
+        root,
+        trees: _,
+        blobs: _,
+    } = PackageHash::from_path(path, name).unwrap();
 
     Package::new(
         root,
@@ -36,8 +40,6 @@ pub fn pkg_req_ver_prov<P: AsRef<Path>>(
         "Some package".to_owned(),
         Version::parse(version).unwrap(),
         vec!["MIT".to_owned()],
-        trees,
-        blobs,
         requires.into_iter().collect(),
     )
 }
@@ -66,9 +68,10 @@ pub fn pkg_ver<P: AsRef<Path>>(name: &str, path: P, version: &str) -> Package {
     pkg_req_ver_prov(name, path, [], version, name)
 }
 
+#[deprecated]
 #[allow(dead_code)]
 pub fn to_req(package: &Package) -> Requirement {
-    let desc: PackageDesc = package.clone().into();
+    let desc: PackageDesc = PackageDesc::from_package(package.clone(), []);
     desc.into()
 }
 
