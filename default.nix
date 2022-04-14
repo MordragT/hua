@@ -19,6 +19,7 @@ in
 naersk-lib.buildPackage {
   pname = "hua";
   root = ./.;
+  gitAllRefs = true;
   buildInputs = with pkgs; [
     openssl
     pkgconfig
