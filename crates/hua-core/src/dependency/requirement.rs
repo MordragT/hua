@@ -1,6 +1,6 @@
 use crate::{
     extra,
-    store::{Blob, PackageDesc},
+    store::{object::Blob, package::PackageDesc},
 };
 use console::style;
 use semver::VersionReq;

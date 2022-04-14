@@ -1,4 +1,4 @@
-use crate::store::Blob;
+use crate::store::object::Blob;
 use snafu::prelude::*;
 use std::{fmt::Debug, hash::Hash};
 

@@ -1,16 +1,17 @@
+use self::{
+    id::{ObjectId, PackageId},
+    object::{Object, ObjectKind},
+    package::Package,
+};
 use snafu::prelude::*;
 use std::path::PathBuf;
 
-pub use backend::{Backend, LocalBackend};
-pub use id::*;
-pub use object::*;
-pub use package::*;
 pub use store::*;
 
-mod backend;
-mod id;
-mod object;
-mod package;
+pub mod backend;
+pub mod id;
+pub mod object;
+pub mod package;
 mod store;
 
 #[derive(Debug, Snafu)]

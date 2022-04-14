@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     dependency::{DependencyGraph, Requirement},
     extra::path::ComponentPathBuf,
-    store::{Backend, PackageId, Store},
+    store::{backend::Backend, id::PackageId, Store},
 };
 use std::collections::HashSet;
 use std::fs;

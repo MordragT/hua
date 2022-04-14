@@ -3,7 +3,7 @@ use crate::{
     dependency::Requirement,
     extra::{self, path::ComponentPathBuf},
     generation::{Generation, GenerationBuilder},
-    store::{Backend, PackageId, Store},
+    store::{backend::Backend, id::PackageId, Store},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -22,8 +22,8 @@ pub struct GenerationManager {
 }
 
 impl GenerationManager {
-    pub fn create_under<P: AsRef<Path>>(path: P) -> GenerationResult<Self> {
-        let path = path.as_ref().join("generations");
+    pub fn init<P: AsRef<Path>>(path: P) -> GenerationResult<Self> {
+        let path = path.as_ref().to_owned();
 
         if !path.exists() {
             fs::create_dir(&path).context(IoSnafu)?;

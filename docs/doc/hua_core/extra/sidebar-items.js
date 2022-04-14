@@ -1,1 +1,1 @@
-initSidebarItems({"enum":[["Source",""]],"fn":[["exact_version_req",""],["hash_path","Calculates a hash with all the files under the given path"]],"mod":[["fs",""],["mem",""]],"struct":[["Remote",""]]});
+initSidebarItems({"fn":[["exact_version_req",""]],"mod":[["fs",""],["hash",""],["mem",""],["path",""],["persist",""],["style",""]]});

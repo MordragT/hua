@@ -3,15 +3,15 @@
         </a><h2 class="location"></h2>
     </nav>
     <nav class="sidebar"><a class="sidebar-logo" href="../../../hua_core/index.html"><div class="logo-container"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></div>
-        </a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../../hua_core/index.html"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></a><nav class="sub"><div class="theme-picker hidden"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu" title="themes"><img width="22" height="22" alt="Pick another theme!" src="../../../brush.svg"></button><div id="theme-choices" role="menu"></div></div><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><button type="button" id="help-button" title="help">?</button><a id="settings-menu" href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../wheel.svg"></a></div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="line-numbers"><span id="1"> 1</span>
-<span id="2"> 2</span>
-<span id="3"> 3</span>
-<span id="4"> 4</span>
-<span id="5"> 5</span>
-<span id="6"> 6</span>
-<span id="7"> 7</span>
-<span id="8"> 8</span>
-<span id="9"> 9</span>
+        </a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../../hua_core/index.html"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></a><nav class="sub"><div class="theme-picker hidden"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu" title="themes"><img width="22" height="22" alt="Pick another theme!" src="../../../brush.svg"></button><div id="theme-choices" role="menu"></div></div><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><button type="button" id="help-button" title="help">?</button><a id="settings-menu" href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../wheel.svg"></a></div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="line-numbers"><span id="1">1</span>
+<span id="2">2</span>
+<span id="3">3</span>
+<span id="4">4</span>
+<span id="5">5</span>
+<span id="6">6</span>
+<span id="7">7</span>
+<span id="8">8</span>
+<span id="9">9</span>
 <span id="10">10</span>
 <span id="11">11</span>
 <span id="12">12</span>
@@ -40,53 +40,31 @@
 <span id="35">35</span>
 <span id="36">36</span>
 <span id="37">37</span>
-<span id="38">38</span>
-<span id="39">39</span>
-<span id="40">40</span>
-<span id="41">41</span>
-<span id="42">42</span>
-<span id="43">43</span>
-<span id="44">44</span>
-<span id="45">45</span>
-<span id="46">46</span>
-<span id="47">47</span>
-<span id="48">48</span>
-<span id="49">49</span>
-<span id="50">50</span>
-<span id="51">51</span>
-<span id="52">52</span>
-<span id="53">53</span>
-<span id="54">54</span>
-<span id="55">55</span>
-<span id="56">56</span>
-<span id="57">57</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::error</span>::<span class="kw-2">*</span>;
-<span class="kw">use</span> <span class="ident">reqwest::Url</span>;
-<span class="kw">use</span> <span class="ident">semver</span>::{<span class="ident">Comparator</span>, <span class="ident">Op</span>, <span class="ident">Version</span>, <span class="ident">VersionReq</span>};
-<span class="kw">use</span> <span class="ident">std</span>::{
-    <span class="ident">hash</span>::{<span class="ident">Hash</span>, <span class="ident">Hasher</span>},
-    <span class="ident">path</span>::{<span class="ident">Path</span>, <span class="ident">PathBuf</span>},
-};
+</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">semver</span>::{<span class="ident">Comparator</span>, <span class="ident">Op</span>, <span class="ident">Version</span>, <span class="ident">VersionReq</span>};
 
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">fs</span>;
+<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">hash</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">mem</span>;
+<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">path</span>;
+<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">persist</span>;
+<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">style</span>;
 
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Remote</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
-    <span class="kw">pub</span> <span class="ident">data</span>: <span class="ident">T</span>,
-    <span class="kw">pub</span> <span class="ident">source</span>: <span class="ident">Url</span>,
-}
+<span class="comment">// pub struct Remote&lt;T&gt; {</span>
+<span class="comment">//     pub data: T,</span>
+<span class="comment">//     pub source: Url,</span>
+<span class="comment">// }</span>
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Remote</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">data</span>: <span class="ident">T</span>, <span class="ident">source</span>: <span class="ident">Url</span>) -&gt; <span class="self">Self</span> {
-        <span class="self">Self</span> { <span class="ident">data</span>, <span class="ident">source</span> }
-    }
-}
+<span class="comment">// impl&lt;T&gt; Remote&lt;T&gt; {</span>
+<span class="comment">//     pub fn new(data: T, source: Url) -&gt; Self {</span>
+<span class="comment">//         Self { data, source }</span>
+<span class="comment">//     }</span>
+<span class="comment">// }</span>
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">Source</span> {
-    <span class="ident">Local</span> { <span class="ident">path</span>: <span class="ident">PathBuf</span>, <span class="ident">checksum</span>: <span class="ident">u64</span> },
-    <span class="ident">Http</span> { <span class="ident">url</span>: <span class="ident">Url</span>, <span class="ident">checksum</span>: <span class="ident">u64</span> },
-}
+<span class="comment">// #[derive(Debug)]</span>
+<span class="comment">// pub enum Source {</span>
+<span class="comment">//     Local { path: PathBuf, checksum: u64 },</span>
+<span class="comment">//     Http { url: Url, checksum: u64 },</span>
+<span class="comment">// }</span>
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">exact_version_req</span>(<span class="ident">v</span>: <span class="ident">Version</span>) -&gt; <span class="ident">VersionReq</span> {
     <span class="ident">VersionReq</span> {
@@ -99,24 +77,6 @@
         }],
     }
 }
-
-<span class="comment">// TODO use File and Reader to hash contents not read_dir</span>
-
-<span class="doccomment">/// Calculates a hash with all the files under the given path</span>
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">hash_path</span><span class="op">&lt;</span><span class="ident">P</span>: <span class="ident">AsRef</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span>, <span class="ident">H</span>: <span class="ident">Hasher</span><span class="op">&gt;</span>(<span class="ident">path</span>: <span class="ident">P</span>, <span class="ident">state</span>: <span class="kw-2">&amp;mut</span> <span class="ident">H</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
-    <span class="kw">let</span> <span class="ident">path</span> <span class="op">=</span> <span class="ident">path</span>.<span class="ident">as_ref</span>();
-    <span class="kw">if</span> <span class="ident">path</span>.<span class="ident">is_dir</span>() {
-        <span class="ident">path</span>.<span class="ident">read_dir</span>()<span class="question-mark">?</span>
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">res</span><span class="op">|</span> <span class="kw">match</span> <span class="ident">res</span> {
-                <span class="prelude-val">Ok</span>(<span class="ident">entry</span>) =&gt; <span class="ident">hash_path</span>(<span class="ident">entry</span>.<span class="ident">path</span>(), <span class="ident">state</span>),
-                <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">e</span>.<span class="ident">into</span>()),
-            })
-            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span><span class="op">&gt;</span>()
-    } <span class="kw">else</span> {
-        <span class="ident">std::fs::read</span>(<span class="ident">path</span>)<span class="question-mark">?</span>.<span class="ident">hash</span>(<span class="ident">state</span>);
-        <span class="prelude-val">Ok</span>(())
-    }
-}
 </code></pre></div>
-</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="hua_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.61.0-nightly (68369a041 2022-02-22)" ></div>
+</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="hua_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.62.0-nightly (52ca603da 2022-04-12)" ></div>
 </body></html>

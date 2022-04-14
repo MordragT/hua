@@ -10,11 +10,18 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::*;
+use super::{
+    backend::{Backend, LocalBackend},
+    object::{Blob, Objects},
+    package::{PackageDesc, Packages},
+    *,
+};
 
 /// The filename of the packages database of the store
-pub const PACKAGES_DB: &str = "packages.db";
+const PACKAGES_DB: &str = "packages.db";
 pub const STORE_PATH: &str = "/hua/store/";
+
+pub type LocalStore = Store<LocalBackend>;
 
 /// A Store that contains all the packages installed by any user
 /// Content Addressable Store
@@ -193,14 +200,17 @@ impl<B: Backend, const BAR: bool> Store<B, BAR> {
                     } else {
                         // Object is saved under current package
                         let object = unsafe { self.objects().get_unchecked(&id) };
-                        if let original = object.to_path(&path_in_store) && original.exists() {
+                        let original = object.to_path(&path_in_store);
+                        if original.exists() {
                             fs::hard_link(&original, &dest).context(LinkObjectsSnafu {
                                 kind: ObjectKind::Blob,
                                 original,
                                 link: dest,
                             })?;
                         } else {
-                            return Err(StoreError::ObjectNotRetrievable { object: object.clone() })
+                            return Err(StoreError::ObjectNotRetrievable {
+                                object: object.clone(),
+                            });
                         }
                     }
                     object_ids.insert(id);
@@ -362,15 +372,13 @@ impl<B: Backend, const BAR: bool> Store<B, BAR> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Store, PACKAGES_DB};
-    use crate::{
-        extra::path::ComponentPathBuf, store::backend::LocalBackend, support::*, user::UserManager,
-    };
+    use super::{LocalStore, PACKAGES_DB};
+    use crate::{extra::path::ComponentPathBuf, support::*, user::UserManager};
     use std::{fs, path::Path};
     use temp_dir::TempDir;
 
-    fn store_create_at_path(path: &Path) -> Store<LocalBackend> {
-        let store = Store::<LocalBackend>::init(&path).unwrap();
+    fn store_create_at_path(path: &Path) -> LocalStore {
+        let store = LocalStore::init(&path).unwrap();
 
         let store_db = path.join(PACKAGES_DB);
 
@@ -393,7 +401,7 @@ mod tests {
         let path = temp_dir.child("store");
         fs::create_dir(&path).unwrap();
 
-        let res = Store::<LocalBackend>::init(&path);
+        let res = LocalStore::init(&path);
 
         assert!(res.is_err());
     }
@@ -404,7 +412,7 @@ mod tests {
         let path = temp_dir.child("store");
         let _store = store_create_at_path(&path);
 
-        let _store = Store::<LocalBackend>::open(path).unwrap();
+        let _store = LocalStore::open(path).unwrap();
     }
 
     #[test]
@@ -412,7 +420,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.child("store");
 
-        let res = Store::<LocalBackend>::open(path);
+        let res = LocalStore::open(path);
 
         assert!(res.is_err());
     }
@@ -456,7 +464,7 @@ mod tests {
         store.insert(one, one_path).unwrap();
         store.insert(two, two_path).unwrap();
 
-        let mut user_manager = UserManager::create_at_path(&user_manager_path).unwrap();
+        let mut user_manager = UserManager::init(&user_manager_path).unwrap();
         assert!(user_manager
             .insert_requirement(one_req, &mut store)
             .unwrap());
@@ -474,7 +482,7 @@ mod tests {
         let user_manager_path = temp_dir.child("user");
 
         let mut store = store_create_at_path(&path);
-        let mut user_manager = UserManager::create_at_path(&user_manager_path).unwrap();
+        let mut user_manager = UserManager::init(&user_manager_path).unwrap();
 
         let removed = store.remove_unused(&mut user_manager).unwrap();
 

@@ -1,4 +1,4 @@
-use super::{object::Objects, *};
+use super::{object::Objects, package::Packages, *};
 use crate::extra::persist::Pot;
 use rustbreak::PathDatabase;
 use snafu::ResultExt;
@@ -74,7 +74,7 @@ impl Backend for LocalBackend {
 }
 
 #[derive(Debug)]
-pub struct MemoryBackend {
+struct MemoryBackend {
     objects: Objects,
     packages: Packages,
 }

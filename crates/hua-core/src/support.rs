@@ -1,7 +1,10 @@
 use crate::{
     dependency::Requirement,
     extra::hash::PackageHash,
-    store::{Blob, Package, PackageDesc},
+    store::{
+        object::Blob,
+        package::{Package, PackageDesc},
+    },
 };
 use relative_path::RelativePathBuf;
 use semver::{Version, VersionReq};

@@ -2,7 +2,7 @@ use crate::{
     dependency::Requirement,
     extra::{path::ComponentPathBuf, persist::Pot},
     generation::GenerationManager,
-    store::{Backend, PackageId, Store},
+    store::{backend::Backend, id::PackageId, Store},
     user::User,
 };
 use rustbreak::PathDatabase;
@@ -28,10 +28,18 @@ struct Users {
 }
 
 impl Users {
-    pub fn create_under<P: AsRef<Path>>(path: P) -> UserResult<Self> {
+    pub fn init<P: AsRef<Path>>(path: P) -> UserResult<Self> {
         let current = 0;
         let mut list = HashMap::new();
-        let user = User::create_under(path.as_ref())?;
+
+        let name = users::get_current_username()
+            .ok_or(UserError::UsernameNotFound)?
+            .into_string()
+            .map_err(|_| UserError::Whatever {
+                message: "OsString conversion error".to_owned(),
+            })?;
+
+        let user = User::init(path.as_ref().join(&name), name)?;
         list.insert(current, user);
 
         Ok(Self { current, list })
@@ -48,15 +56,14 @@ pub struct UserManager {
 impl UserManager {
     /// Create a new user manager under the given path.
     /// Returns an error if the path is already present.
-    pub fn create_at_path<P: AsRef<Path>>(path: P) -> UserResult<Self> {
+    pub fn init<P: AsRef<Path>>(path: P) -> UserResult<Self> {
         let path = path.as_ref();
         fs::create_dir(&path).context(IoSnafu)?;
 
-        let database =
-            PathDatabase::create_at_path(path.join(USERS_DB), Users::create_under(&path)?)
-                .context(RustbreakSnafu {
-                    message: format!("at {USERS_DB}"),
-                })?;
+        let database = PathDatabase::create_at_path(path.join(USERS_DB), Users::init(&path)?)
+            .context(RustbreakSnafu {
+                message: format!("at {USERS_DB}"),
+            })?;
 
         let users = database.get_data(false).context(RustbreakSnafu {
             message: "could not load user data".to_owned(),
@@ -220,9 +227,8 @@ mod tests {
     use super::UserManager;
     use super::USERS_DB;
     use crate::extra::path::ComponentPathBuf;
-    use crate::store::LocalBackend;
     use crate::user::UserError;
-    use crate::{store::Store, support::*};
+    use crate::{store::LocalStore, support::*};
     use std::assert_matches::assert_matches;
     use std::fs;
     use temp_dir::TempDir;
@@ -232,7 +238,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.child("user");
 
-        let _user_manager = UserManager::create_at_path(&path).unwrap();
+        let _user_manager = UserManager::init(&path).unwrap();
 
         let db = path.join(USERS_DB);
 
@@ -246,7 +252,7 @@ mod tests {
         let path = temp_dir.child("user");
 
         {
-            let _user_manager = UserManager::create_at_path(&path).unwrap();
+            let _user_manager = UserManager::init(&path).unwrap();
         }
 
         let _user_manager = UserManager::open(&path).unwrap();
@@ -266,10 +272,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let path = temp_dir.child("user");
-        let mut user_manager = UserManager::create_at_path(path).unwrap();
+        let mut user_manager = UserManager::init(path).unwrap();
 
         let store_path = temp_dir.child("store");
-        let mut store = Store::<LocalBackend>::init(&store_path).unwrap();
+        let mut store = LocalStore::init(&store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
@@ -286,10 +292,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let path = temp_dir.child("user");
-        let mut user_manager = UserManager::create_at_path(path).unwrap();
+        let mut user_manager = UserManager::init(path).unwrap();
 
         let store_path = temp_dir.child("store");
-        let mut store = Store::<LocalBackend>::init(&store_path).unwrap();
+        let mut store = LocalStore::init(&store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
@@ -309,10 +315,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let path = temp_dir.child("user");
-        let mut user_manager = UserManager::create_at_path(path).unwrap();
+        let mut user_manager = UserManager::init(path).unwrap();
 
         let store_path = temp_dir.child("store");
-        let store = Store::<LocalBackend>::init(&store_path).unwrap();
+        let store = LocalStore::init(&store_path).unwrap();
 
         let req = req("one", ">0.0.1");
         let res = user_manager.insert_requirement(req, &store).unwrap_err();
@@ -325,10 +331,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let path = temp_dir.child("user");
-        let mut user_manager = UserManager::create_at_path(path).unwrap();
+        let mut user_manager = UserManager::init(path).unwrap();
 
         let store_path = temp_dir.child("store");
-        let mut store = Store::<LocalBackend>::init(&store_path).unwrap();
+        let mut store = LocalStore::init(&store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
@@ -348,10 +354,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let path = temp_dir.child("user");
-        let mut user_manager = UserManager::create_at_path(path).unwrap();
+        let mut user_manager = UserManager::init(path).unwrap();
 
         let store_path = temp_dir.child("store");
-        let store = Store::<LocalBackend>::init(&store_path).unwrap();
+        let store = LocalStore::init(&store_path).unwrap();
 
         let req = req("one", ">0.0.1");
         let res = user_manager.remove_requirement(&req, &store).unwrap();
@@ -364,10 +370,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let path = temp_dir.child("user");
-        let mut user_manager = UserManager::create_at_path(path).unwrap();
+        let mut user_manager = UserManager::init(path).unwrap();
 
         let store_path = temp_dir.child("store");
-        let mut store = Store::<LocalBackend>::init(&store_path).unwrap();
+        let mut store = LocalStore::init(&store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
@@ -386,7 +392,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let path = temp_dir.child("user");
-        let mut user_manager = UserManager::create_at_path(path).unwrap();
+        let mut user_manager = UserManager::init(path).unwrap();
         let res = user_manager.remove_generation(2).unwrap();
 
         assert!(!res);
@@ -396,7 +402,7 @@ mod tests {
     fn user_manager_remove_generation_err() {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.child("user");
-        let mut user_manager = UserManager::create_at_path(&path).unwrap();
+        let mut user_manager = UserManager::init(&path).unwrap();
 
         assert!(user_manager.remove_generation(0).is_err());
     }
@@ -406,10 +412,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let path = temp_dir.child("user");
-        let mut user_manager = UserManager::create_at_path(path).unwrap();
+        let mut user_manager = UserManager::init(path).unwrap();
 
         let store_path = temp_dir.child("store");
-        let mut store = Store::<LocalBackend>::init(&store_path).unwrap();
+        let mut store = LocalStore::init(&store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
@@ -436,7 +442,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let path = temp_dir.child("user");
-        let user_manager = UserManager::create_at_path(path).unwrap();
+        let user_manager = UserManager::init(path).unwrap();
 
         let res = user_manager.contains(&[1_u8; 32].into());
 
@@ -448,10 +454,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let path = temp_dir.child("user");
-        let mut user_manager = UserManager::create_at_path(path).unwrap();
+        let mut user_manager = UserManager::init(path).unwrap();
 
         let store_path = temp_dir.child("store");
-        let mut store = Store::<LocalBackend>::init(&store_path).unwrap();
+        let mut store = LocalStore::init(&store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);

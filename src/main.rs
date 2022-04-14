@@ -5,7 +5,7 @@ use console::style;
 use dialoguer::{Confirm, Select};
 use hua_core::{
     extra::path::ComponentPathBuf,
-    store::{LocalBackend, Package, Store, STORE_PATH},
+    store::{package::Package, LocalStore, STORE_PATH},
     user::UserManager,
 };
 use std::{error::Error, fs, path::PathBuf};
@@ -55,19 +55,21 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     match matches.subcommand() {
         Some(("init", _)) => {
-            if let path = PathBuf::from(HUA_PATH) && !path.exists() {
+            let path = PathBuf::from(HUA_PATH);
+            if !path.exists() {
                 fs::create_dir(HUA_PATH)?;
             }
 
-            if let path = PathBuf::from(GLOBAL_PATH) && !path.exists() {
+            let path = PathBuf::from(GLOBAL_PATH);
+            if !path.exists() {
                 fs::create_dir(path)?;
             }
 
             let global_paths = ComponentPathBuf::from_path(GLOBAL_PATH);
             global_paths.create_dirs()?;
 
-            let _store = Store::<LocalBackend>::init(STORE_PATH)?;
-            let _user_manager = UserManager::create_at_path(USER_MANAGER_PATH)?;
+            let _store = LocalStore::init(STORE_PATH)?;
+            let _user_manager = UserManager::init(USER_MANAGER_PATH)?;
             println!("Files and folders created!");
         }
         Some(("store", sub_matches)) => match sub_matches.subcommand() {
@@ -75,14 +77,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let name = sub_matches
                     .value_of("NAME")
                     .expect("When searching the store a package name has to be given.");
-                let store = Store::<LocalBackend>::open(STORE_PATH)?;
+                let store = LocalStore::open(STORE_PATH)?;
                 for (id, desc, _objects) in store.packages().filter_by_name_starting_with(name) {
                     println!("Index {id}: {desc}\n");
                 }
                 println!("Package not found");
             }
             Some(("collect-garbage", _)) => {
-                let mut store = Store::<LocalBackend>::open(STORE_PATH)?;
+                let mut store = LocalStore::open(STORE_PATH)?;
                 let user_manager = UserManager::open(USER_MANAGER_PATH)?;
                 let _removed = store.remove_unused(&user_manager)?;
                 store.flush()?;
@@ -98,7 +100,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let lock_data = fs::read(lock_file)?;
                 let package = toml::from_slice::<Package>(&lock_data)?;
 
-                let mut store = Store::<LocalBackend>::open(STORE_PATH)?;
+                let mut store = LocalStore::open(STORE_PATH)?;
 
                 println!("Package to add to the store: {}", &package.desc);
                 if Confirm::new()
@@ -138,7 +140,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .value_of("NAME")
                 .expect("When adding a package, a name has to be given.");
 
-            let store = Store::<LocalBackend>::open(STORE_PATH)?;
+            let store = LocalStore::open(STORE_PATH)?;
             let mut user_manager = UserManager::open(USER_MANAGER_PATH)?;
 
             let (names, packages): (Vec<_>, Vec<_>) = store
@@ -175,7 +177,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .value_of("NAME")
                 .expect("When removing a package, a name has to be provided");
 
-            let store = Store::<LocalBackend>::open(STORE_PATH)?;
+            let store = LocalStore::open(STORE_PATH)?;
             let mut user_manager = UserManager::open(USER_MANAGER_PATH)?;
 
             let (names, reqs): (Vec<_>, Vec<_>) = user_manager

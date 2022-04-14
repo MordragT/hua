@@ -844,7 +844,7 @@ dependencies = [
 [[package]]
 name = "os_type"
 version = "2.4.0"
-source = "git+https://github.com/MordragT/os_type#0c4146ce4400ef6684b420c222d8f39310f9d140"
+source = "git+https://github.com/MordragT/os_type?rev=0c4146ce4400ef6684b420c222d8f39310f9d140#0c4146ce4400ef6684b420c222d8f39310f9d140"
 dependencies = [
  "regex",
 ]

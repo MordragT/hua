@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Cache","Fetches and manages resources in a local cache directory."],["CacheBuilder","Builder to facilitate creating `Cache` objects."]]});

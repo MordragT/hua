@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Sha256","Sha256 implementation of the `Hasher` trait."]]});

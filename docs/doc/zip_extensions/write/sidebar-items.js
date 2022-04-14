@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["zip_create_from_directory","Creates a zip archive that contains the files and directories from the specified directory."],["zip_create_from_directory_with_options","Creates a zip archive that contains the files and directories from the specified directory, uses the specified compression level."]],"trait":[["ZipWriterExtensions",""]]});

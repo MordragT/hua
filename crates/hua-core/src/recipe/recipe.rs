@@ -4,7 +4,11 @@ use crate::{
     extra::hash::PackageHash,
     generation::GenerationBuilder,
     jail::{Bind, JailBuilder},
-    store::{Backend, Package, PackageDesc, Store},
+    store::{
+        backend::Backend,
+        package::{Package, PackageDesc},
+        Store,
+    },
 };
 use cached_path::{Cache, Options};
 use fs_extra::dir::CopyOptions;
@@ -214,7 +218,7 @@ mod tests {
 
     use crate::{
         recipe::{Recipe, LINUX, X86, X86_64},
-        store::{LocalBackend, Store},
+        store::{backend::LocalBackend, LocalStore},
     };
 
     #[test]
@@ -246,7 +250,7 @@ mod tests {
 
         let temp_dir = TempDir::new().unwrap();
         let store_path = temp_dir.child("store");
-        let mut store = Store::<LocalBackend>::init(store_path).unwrap();
+        let mut store = LocalStore::init(store_path).unwrap();
         let cache = CacheBuilder::new().build().unwrap();
 
         let recipe_path = temp_dir.child("recipe");

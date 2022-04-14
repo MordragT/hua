@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["FdMapping","A mapping from a file descriptor in the parent to a file descriptor in the child, to be applied when spawning a child process."],["FdMappingCollision","Error setting up FD mappings, because there were two or more mappings for the same child FD."]],"trait":[["CommandFdExt","Extension to add file descriptor mappings to a [`Command`]."]]});

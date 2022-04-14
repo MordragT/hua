@@ -1,4 +1,4 @@
-use crate::store::{Backend, Blob, PackageDesc, PackageId, Store};
+use crate::store::{backend::Backend, id::PackageId, object::Blob, package::PackageDesc, Store};
 use daggy::{Dag, NodeIndex};
 use std::collections::{HashMap, HashSet};
 
@@ -226,7 +226,7 @@ fn conflicts<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::store::{LocalBackend, Store, StoreError};
+    use crate::store::{LocalStore, StoreError};
     use crate::support::*;
     use std::assert_matches::assert_matches;
     use temp_dir::TempDir;
@@ -237,7 +237,7 @@ mod tests {
         let store_path = temp_dir.child("store");
 
         let mut graph = DependencyGraph::new();
-        let mut store = Store::<LocalBackend>::init(store_path).unwrap();
+        let mut store = LocalStore::init(store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
@@ -279,7 +279,7 @@ mod tests {
         let store_path = temp_dir.child("store");
 
         let mut graph = DependencyGraph::new();
-        let mut store = Store::<LocalBackend>::init(store_path).unwrap();
+        let mut store = LocalStore::init(store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
@@ -310,7 +310,7 @@ mod tests {
         let store_path = temp_dir.child("store");
 
         let mut graph = DependencyGraph::new();
-        let mut store = Store::<LocalBackend>::init(store_path).unwrap();
+        let mut store = LocalStore::init(store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg_req("one", &one_path, [req("two", ">=1.0")]);
@@ -341,7 +341,7 @@ mod tests {
         let store_path = temp_dir.child("store");
 
         let mut graph = DependencyGraph::new();
-        let mut store = Store::<LocalBackend>::init(store_path).unwrap();
+        let mut store = LocalStore::init(store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
@@ -382,7 +382,7 @@ mod tests {
         let store_path = temp_dir.child("store");
 
         let mut graph = DependencyGraph::new();
-        let mut store = Store::<LocalBackend>::init(store_path).unwrap();
+        let mut store = LocalStore::init(store_path).unwrap();
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);

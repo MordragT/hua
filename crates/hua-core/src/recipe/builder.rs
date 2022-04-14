@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     dependency::Requirement,
     recipe::Recipe,
-    store::{LocalBackend, Package, Store, STORE_PATH},
+    store::{package::Package, LocalStore, STORE_PATH},
 };
 use cached_path::CacheBuilder;
 use relative_path::RelativePathBuf;
@@ -56,7 +56,7 @@ pub fn build_recipe(data: RecipeData) -> RecipeResult<(Package, PathBuf)> {
     );
 
     let cache = CacheBuilder::default().build().context(CacheSnafu)?;
-    let store = Store::<LocalBackend>::open(STORE_PATH).context(StoreSnafu)?;
+    let store = LocalStore::open(STORE_PATH).context(StoreSnafu)?;
 
     recipe
         .fetch(&cache)?

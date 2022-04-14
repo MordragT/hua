@@ -1,4 +1,7 @@
-use super::{Blob, ObjectId, PackageId, Tree};
+use super::{
+    object::{Blob, Tree},
+    ObjectId, PackageId,
+};
 use crate::{dependency::Requirement, extra::hash::PackageHash};
 use console::style;
 use semver::Version;

@@ -1,15 +1,15 @@
 use crate::{
     dependency::Requirement,
     recipe::Recipe,
-    store::{Blob, LocalBackend, Store, STORE_PATH},
+    store::{object::Blob, LocalStore, STORE_PATH},
 };
 use cached_path::CacheBuilder;
 use relative_path::RelativePathBuf;
 use semver::{Version, VersionReq};
 use snafu::prelude::*;
 use std::{
-    ffi::CStr,
-    os::raw::{c_char, c_size_t},
+    ffi::{c_size_t, CStr},
+    os::raw::c_char,
     str::Utf8Error,
 };
 
@@ -188,7 +188,7 @@ fn inner_build_recipe<'a>(
         target_dir,
     );
 
-    let store = Store::<LocalBackend>::open(STORE_PATH).unwrap();
+    let store = LocalStore::open(STORE_PATH).unwrap();
     let cache = CacheBuilder::new().build().unwrap();
 
     let (_package, _path) = recipe

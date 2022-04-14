@@ -8,7 +8,10 @@ use std::{
 };
 use walkdir::WalkDir;
 
-use crate::store::{Blob, ObjectId, PackageId, RawId, Tree};
+use crate::store::{
+    id::{ObjectId, PackageId, RawId},
+    object::{Blob, Tree},
+};
 
 #[derive(Clone)]
 pub struct Blake3;
