@@ -137,6 +137,26 @@ impl UserManager {
             .context(GenerationSnafu)?)
     }
 
+    pub fn filter_requirements<'a, P>(
+        &'a self,
+        predicate: P,
+    ) -> impl Iterator<Item = &'a Requirement>
+    where
+        P: Fn(&Requirement) -> bool + 'a,
+    {
+        self.current_generation_manager()
+            .current_requirements()
+            .iter()
+            .filter(move |req| predicate(req))
+    }
+
+    pub fn filter_requirements_by_name_starting_with<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> impl Iterator<Item = &'a Requirement> {
+        self.filter_requirements(move |req| req.name().starts_with(name))
+    }
+
     /// Removes the specified generation.
     /// Returns true if the generation was present and false if it wasnt.
     pub fn remove_generation(&mut self, id: usize) -> UserResult<bool> {

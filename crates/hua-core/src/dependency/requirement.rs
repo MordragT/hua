@@ -1,4 +1,8 @@
-use crate::store::Blob;
+use crate::{
+    extra,
+    store::{Blob, PackageDesc},
+};
+use console::style;
 use semver::VersionReq;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fmt, fmt::Debug, hash::Hash};
@@ -48,19 +52,22 @@ impl PartialOrd for Requirement {
 
 impl fmt::Display for Requirement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&format!(
-            "Dependency {}:\nversion_req: {}\ncomponents: {:#?}\n",
-            self.name, self.version_req, self.blobs
-        ))
+        write!(
+            f,
+            "{} {}\ncomponents: {:#?}\n",
+            style(&self.name).green(),
+            self.version_req,
+            self.blobs
+        )
     }
 }
 
-// impl From<PackageDesc> for Requirement {
-//     fn from(desc: PackageDesc) -> Self {
-//         Self::new(
-//             desc.name,
-//             extra::exact_version_req(desc.version),
-//             desc.blobs,
-//         )
-//     }
-// }
+impl From<(PackageDesc, BTreeSet<Blob>)> for Requirement {
+    fn from(data: (PackageDesc, BTreeSet<Blob>)) -> Self {
+        Self::new(
+            data.0.name,
+            extra::exact_version_req(data.0.version),
+            data.1,
+        )
+    }
+}

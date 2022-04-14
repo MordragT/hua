@@ -5,6 +5,7 @@ pub mod hash;
 pub mod mem;
 pub mod path;
 pub mod persist;
+pub mod style;
 
 // pub struct Remote<T> {
 //     pub data: T,

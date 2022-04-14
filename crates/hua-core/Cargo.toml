@@ -29,3 +29,4 @@ cached-path = { version = "0.5", default-features = false, features = ["rustls-t
 os_type = { git = "https://github.com/MordragT/os_type" }
 command-fds = "0.2"
 console = "0.15"
+indicatif = "0.16"

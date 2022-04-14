@@ -1,4 +1,8 @@
-use crate::{dependency::Requirement, extra::path::ComponentPathBuf, user::UserManager};
+use crate::{
+    dependency::Requirement,
+    extra::{path::ComponentPathBuf, style::ProgressBar},
+    user::UserManager,
+};
 use std::{
     collections::HashSet,
     fs::{self},
@@ -15,7 +19,7 @@ pub const STORE_PATH: &str = "/hua/store/";
 /// A Store that contains all the packages installed by any user
 /// Content Addressable Store
 #[derive(Debug)]
-pub struct Store<B: Backend> {
+pub struct Store<B: Backend, const BAR: bool = true> {
     path: PathBuf,
     backend: B,
 }
@@ -48,7 +52,7 @@ impl<B: Backend<Source = PathBuf>> Store<B> {
     }
 }
 
-impl<B: Backend> Store<B> {
+impl<B: Backend, const BAR: bool> Store<B, BAR> {
     pub fn packages(&self) -> &Packages {
         self.backend.packages()
     }
@@ -118,6 +122,17 @@ impl<B: Backend> Store<B> {
     ) -> Option<impl Iterator<Item = &'a Blob>> {
         if let Some(objects) = self.packages().get_children(package_id) {
             Some(self.objects().get_blobs(objects))
+        } else {
+            None
+        }
+    }
+
+    pub fn get_blobs_cloned_of_package(
+        &self,
+        package_id: &PackageId,
+    ) -> Option<impl Iterator<Item = Blob> + '_> {
+        if let Some(objects) = self.packages().get_children(package_id) {
+            Some(self.objects().get_blobs_cloned(objects))
         } else {
             None
         }
@@ -302,14 +317,31 @@ impl<B: Backend> Store<B> {
             .map(|(id, _desc, _objects)| *id)
             .collect::<Vec<PackageId>>();
 
-        for package_id in &to_remove {
-            let root = unsafe {
-                self.packages()
-                    .path_in_store(&package_id, &self.path)
-                    .unwrap_unchecked()
-            };
+        if BAR {
+            let mut bar = ProgressBar::new(to_remove.len() as u64);
 
-            fs::remove_dir_all(root).context(IoSnafu)?;
+            for package_id in &to_remove {
+                let root = unsafe {
+                    self.packages()
+                        .path_in_store(&package_id, &self.path)
+                        .unwrap_unchecked()
+                };
+
+                fs::remove_dir_all(root).context(IoSnafu)?;
+                bar.inc(1);
+            }
+
+            bar.finish("Unused packages removed");
+        } else {
+            for package_id in &to_remove {
+                let root = unsafe {
+                    self.packages()
+                        .path_in_store(&package_id, &self.path)
+                        .unwrap_unchecked()
+                };
+
+                fs::remove_dir_all(root).context(IoSnafu)?;
+            }
         }
 
         Ok(to_remove)

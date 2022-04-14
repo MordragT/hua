@@ -22,6 +22,7 @@ naersk-lib.buildPackage {
   buildInputs = with pkgs; [
     openssl
     pkgconfig
+    bubblewrap
   ];
   meta = with lib; {
     description = "Hua package manager";

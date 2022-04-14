@@ -42,6 +42,9 @@
       #   lib.makeLibraryPath
       #   [ pkg-config stdenv.cc.cc.lib libffi ncurses zlib ];
 
+      # for pam-client which uses bindgen source
+      # LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+
       nativeBuildInputs = with pkgs; [
         (toolchain.withComponents [
           "cargo" "rustc" "rust-src" "rustfmt" "clippy"    
@@ -55,6 +58,7 @@
         # llvmPkgs.llvm.dev
         # lldb
         zig
+        # linux-pam
         # (pkgs.writeShellScriptBin "roc" ''
         #   #!/usr/bin/env sh
 

@@ -146,6 +146,10 @@ impl GenerationManager {
             .flat_map(|(_id, gen)| gen.packages().iter())
     }
 
+    pub fn current_requirements(&self) -> &HashSet<Requirement> {
+        self.get_current().requirements()
+    }
+
     pub fn contains_package(&self, id: &PackageId) -> bool {
         self.packages().find(|idx| *idx == id).is_some()
     }

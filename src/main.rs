@@ -1,9 +1,11 @@
 #![feature(let_chains)]
 
 use clap::{arg, Command};
+use console::style;
+use dialoguer::{Confirm, Select};
 use hua_core::{
     extra::path::ComponentPathBuf,
-    store::{Store, STORE_PATH},
+    store::{LocalBackend, Package, Store, STORE_PATH},
     user::UserManager,
 };
 use std::{error::Error, fs, path::PathBuf};
@@ -17,31 +19,30 @@ fn main() -> Result<(), Box<dyn Error>> {
         .about("A simple package manager")
         .subcommand_required(true)
         .arg_required_else_help(true)
-        .subcommands(vec![
+        .subcommands([
             Command::new("init").about("Initialise the folder structure"),
             Command::new("store")
                 .about("Do operations on the store")
                 .arg_required_else_help(true)
-                .subcommands(vec![
+                .subcommands([
                     Command::new("search").about("Searches the store for the given path").arg(arg!(<NAME> "The name to search for")),
                     Command::new("collect-garbage").about("Collects all unused packages in the store and deletes them"),
+                    Command::new("add").about("Add package to the store").args([arg!(<LOCK_FILE> "The lock file of the package"), arg!(<PATH> "The path of the package files")])
                     ]),
             Command::new("generations")
                 .about("Do operations on generations")
                 .arg_required_else_help(true)
-                .subcommands(vec![
+                .subcommands([
                     Command::new("remove")
                         .about("Remove a specified generation")
-                        .args(vec![
-                            arg!(<ID> "The id of the generation to remove"),
-                        ])
+                        .arg(arg!(<ID> "The id of the generation to remove"))
                         .arg_required_else_help(true),
                     Command::new("list").about("List all the generations of the current user")]
                 ),
             Command::new("add")
                 .about("Adds a package to the store and switches to a new generation with the package")
                 .arg_required_else_help(true)
-                .args(vec![arg!(<NAME> "The name of the package"), arg!(<VERSION> "The version of the package"), arg!(<PATH> "The path where the package is found")]),
+                .arg(arg!(<NAME> "The name of the package")),
             Command::new("remove")
                 .about("Creates a new generation without the specified package and switches to the generation")
                 .arg_required_else_help(true)
@@ -54,7 +55,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     match matches.subcommand() {
         Some(("init", _)) => {
-            fs::create_dir(HUA_PATH)?;
+            if let path = PathBuf::from(HUA_PATH) && !path.exists() {
+                fs::create_dir(HUA_PATH)?;
+            }
 
             if let path = PathBuf::from(GLOBAL_PATH) && !path.exists() {
                 fs::create_dir(path)?;
@@ -63,7 +66,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let global_paths = ComponentPathBuf::from_path(GLOBAL_PATH);
             global_paths.create_dirs()?;
 
-            let _store = Store::init(STORE_PATH)?;
+            let _store = Store::<LocalBackend>::init(STORE_PATH)?;
             let _user_manager = UserManager::create_at_path(USER_MANAGER_PATH)?;
             println!("Files and folders created!");
         }
@@ -72,25 +75,48 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let name = sub_matches
                     .value_of("NAME")
                     .expect("When searching the store a package name has to be given.");
-                let store = Store::open(STORE_PATH)?;
-                if let Some((id, desc)) = store.packages().find_by_name(name) {
-                    println!("Index {id}: {desc}");
+                let store = Store::<LocalBackend>::open(STORE_PATH)?;
+                for (id, desc, _objects) in store.packages().filter_by_name_starting_with(name) {
+                    println!("Index {id}: {desc}\n");
                 }
                 println!("Package not found");
             }
             Some(("collect-garbage", _)) => {
-                let mut store = Store::open(STORE_PATH)?;
+                let mut store = Store::<LocalBackend>::open(STORE_PATH)?;
                 let user_manager = UserManager::open(USER_MANAGER_PATH)?;
-                let removed = store.remove_unused(&user_manager)?;
-                println!("{} packages were removed.", removed.len());
+                let _removed = store.remove_unused(&user_manager)?;
                 store.flush()?;
+            }
+            Some(("add", sub_matches)) => {
+                let lock_file = sub_matches
+                    .value_of("LOCK_FILE")
+                    .expect("A lock file has to be provided when adding a package to the store");
+                let path = sub_matches
+                    .value_of("PATH")
+                    .expect("A path has to be provided when adding a package to the store");
+
+                let lock_data = fs::read(lock_file)?;
+                let package = toml::from_slice::<Package>(&lock_data)?;
+
+                let mut store = Store::<LocalBackend>::open(STORE_PATH)?;
+
+                println!("Package to add to the store: {}", &package.desc);
+                if Confirm::new()
+                    .with_prompt("Do you want to continue?")
+                    .interact()?
+                {
+                    store.insert(package, path)?;
+                    store.flush()?;
+                } else {
+                    println!("Package was not added to the store.");
+                }
             }
             _ => unreachable!(),
         },
         Some(("generations", sub_matches)) => match sub_matches.subcommand() {
             Some(("list", _)) => {
                 let user_manager = UserManager::open(USER_MANAGER_PATH)?;
-                user_manager.list_current_generations()?;
+                user_manager.list_current_generations();
             }
             Some(("remove", sub_matches)) => {
                 let id = sub_matches
@@ -99,8 +125,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .parse()?;
                 let mut user_manager = UserManager::open(USER_MANAGER_PATH)?;
                 user_manager.remove_generation(id)?;
-
                 user_manager.flush()?;
+
+                println!("Generation {id} was successfully removed.");
             }
             _ => unreachable!(),
         },
@@ -110,50 +137,72 @@ fn main() -> Result<(), Box<dyn Error>> {
             let name = sub_matches
                 .value_of("NAME")
                 .expect("When adding a package, a name has to be given.");
-            let version = sub_matches
-                .value_of("VERSION")
-                .expect("When adding a package, a version has to be given.");
-            let path = sub_matches
-                .value_of("PATH")
-                .expect("When adding a package, a path has to be provided.");
 
-            // let mut store = Store::open(STORE_PATH)?;
-            // let mut user_manager = UserManager::open(USER_MANAGER_PATH)?;
+            let store = Store::<LocalBackend>::open(STORE_PATH)?;
+            let mut user_manager = UserManager::open(USER_MANAGER_PATH)?;
 
-            // let package = Package::new(name, Version::parse(version)?, path);
+            let (names, packages): (Vec<_>, Vec<_>) = store
+                .packages()
+                .filter_by_name_starting_with(name)
+                .map(|(id, desc, objects)| {
+                    (
+                        format!("{} {}", style(&desc.name).green(), desc.version),
+                        (id, desc, objects),
+                    )
+                })
+                .unzip();
 
-            // let hash = store.insert(package)?;
-            // user_manager.insert_package(&hash, &mut store)?;
+            let selection = Select::new()
+                .with_prompt("Wich package to add?")
+                .items(&names)
+                .interact_opt()?;
 
-            // let global_paths = ComponentPaths::from_path(GLOBAL_PATH);
-            // user_manager.switch_global_links(&global_paths)?;
+            if let Some(selection) = selection {
+                let name = &names[selection];
+                let (id, desc, _objects) = packages[selection];
+                let blobs = unsafe { store.get_blobs_cloned_of_package(id).unwrap_unchecked() };
+                let req = (desc.clone(), blobs.collect()).into();
 
-            // store.flush()?;
-            // user_manager.flush()?;
-
-            todo!()
+                user_manager.insert_requirement(req, &store)?;
+                user_manager.flush()?;
+                println!("Package {} was successfully added.", name);
+            } else {
+                println!("No package was added.");
+            }
         }
         Some(("remove", sub_matches)) => {
             let name = sub_matches
                 .value_of("NAME")
                 .expect("When removing a package, a name has to be provided");
 
-            let mut store = Store::open(STORE_PATH)?;
+            let store = Store::<LocalBackend>::open(STORE_PATH)?;
             let mut user_manager = UserManager::open(USER_MANAGER_PATH)?;
 
-            todo!()
+            let (names, reqs): (Vec<_>, Vec<_>) = user_manager
+                .filter_requirements_by_name_starting_with(name)
+                .map(|req| {
+                    (
+                        format!("{} {}", style(req.name()).green(), req.version_req()),
+                        req,
+                    )
+                })
+                .unzip();
 
-            // let hash = *store
-            //     .search(name, |key, _package| *key)?
-            //     .first()
-            //     .expect(&format!("Package with the name {} not found", name));
-            // user_manager.remove_package(&hash, &mut store)?;
+            let selection = Select::new()
+                .with_prompt("Wich package to remove?")
+                .items(&names)
+                .interact_opt()?;
 
-            // let global_paths = ComponentPaths::from_path(GLOBAL_PATH);
-            // user_manager.switch_global_links(&global_paths)?;
+            if let Some(selection) = selection {
+                let name = &names[selection];
+                let req = reqs[selection].clone();
 
-            // store.flush()?;
-            // user_manager.flush()?;
+                user_manager.remove_requirement(&req, &store)?;
+                user_manager.flush()?;
+                println!("Package {} was successfully removed.", name);
+            } else {
+                println!("No package was removed.");
+            }
         }
         Some(("shell", _sub_matches)) => todo!(),
         _ => unreachable!(),

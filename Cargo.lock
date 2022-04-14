@@ -286,6 +286,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "dialoguer"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "349d6b4fabcd9e97e1df1ae15395ac7e49fb144946a0d453959dc2696273b9da"
+dependencies = [
+ "console",
+ "tempfile",
+ "zeroize",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -551,7 +562,10 @@ name = "hua"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "console",
+ "dialoguer",
  "hua-core",
+ "toml",
 ]
 
 [[package]]
@@ -564,6 +578,7 @@ dependencies = [
  "console",
  "daggy",
  "fs_extra",
+ "indicatif",
  "os_type",
  "petgraph",
  "pot",
@@ -1705,6 +1720,12 @@ checksum = "244c3741f4240ef46274860397c7c74e50eb23624996930e484c16679633a54c"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "zeroize"
+version = "1.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7eb5728b8afd3f280a869ce1d4c554ffaed35f45c231fc41bfbd0381bef50317"
 
 [[package]]
 name = "zip"
