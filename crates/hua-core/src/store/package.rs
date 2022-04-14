@@ -1,14 +1,11 @@
 use super::{Blob, ObjectId, PackageId, Tree};
-use crate::{
-    dependency::Requirement,
-    extra::{collections::OrdValTreeMap, hash::PackageHash},
-};
+use crate::{dependency::Requirement, extra::hash::PackageHash};
 use console::style;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt::{self},
     io,
     path::{Path, PathBuf},
@@ -39,12 +36,6 @@ impl PackageDesc {
             requires,
         }
     }
-
-    // pub fn matches(&self, requirement: &Requirement) -> bool {
-    //     self.blobs.is_superset(requirement.blobs())
-    //         && requirement.name() == &self.name
-    //         && requirement.version_req().matches(&self.version)
-    // }
 }
 
 impl fmt::Display for PackageDesc {
@@ -68,11 +59,6 @@ impl fmt::Display for PackageDesc {
     }
 }
 
-// #[derive(Debug, Clone, Deserialize, Serialize)]
-// pub struct PackageExt {
-//     pub blobs: HashSet<ObjectId>,
-// }
-
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Package {
@@ -86,10 +72,6 @@ impl Package {
     pub fn new(id: PackageId, desc: PackageDesc) -> Self {
         Self { id, desc }
     }
-
-    // pub fn id(&self) -> PackageId {
-    //     self.id
-    // }
 
     pub fn name(&self) -> &String {
         &self.desc.name
@@ -106,7 +88,7 @@ impl Package {
     pub fn verify<P: AsRef<Path>>(
         &self,
         path: P,
-    ) -> io::Result<(bool, OrdValTreeMap<ObjectId, Tree>, HashMap<ObjectId, Blob>)> {
+    ) -> io::Result<(bool, BTreeMap<Tree, ObjectId>, BTreeMap<Blob, ObjectId>)> {
         let PackageHash { root, trees, blobs } = PackageHash::from_path(path, &self.desc.name)?;
 
         Ok((self.id == root, trees, blobs))
@@ -223,29 +205,6 @@ impl Packages {
             }
         })
     }
-
-    // pub fn filter_map<'a, R, P>(&'a self, mut predicate: P) -> impl Iterator<Item = R> + 'a
-    // where
-    //     P: FnMut(&PackageId, &PackageDesc, &HashSet<ObjectId>) -> Option<R> + 'a,
-    // {
-    //     self.nodes.iter().filter_map(move |(id, desc)| {
-    //         let objects = unsafe { self.children.get(id).unwrap_unchecked() };
-    //         predicate(id, desc, objects)
-    //     })
-    // }
-
-    // pub fn map<'a, R, P>(&self, mut predicate: P) -> impl Iterator<Item = R>
-    // where
-    //     P: FnMut(&PackageId, &PackageDesc, &HashSet<ObjectId>) -> R + 'a,
-    // {
-    //     self.nodes
-    //         .iter()
-    //         .map(|(id, desc)| {
-    //             let objects = unsafe { self.children.get(id).unwrap_unchecked() };
-    //             (id, desc, objects)
-    //         })
-    //         .map(|(id, desc, objects)| predicate(id, desc, objects))
-    // }
 
     pub fn find_by_name_starting_with(&self, name: &str) -> Option<(&PackageId, &PackageDesc)> {
         self.find(|_id, p, _objects| p.name.starts_with(name))

@@ -56,6 +56,8 @@ pub enum StoreError {
     PackageNotFoundById { id: PackageId },
     #[snafu(display("Object vould not be found for {id}"))]
     ObjectNotFoundById { id: ObjectId },
+    #[snafu(display("Object was in store but could not be retrieved: {object}"))]
+    ObjectNotRetrievable { object: Object },
     #[snafu(display("A path or file name might have been invalid Utf-8"))]
     InvalidUtf8,
     #[snafu(display("StripPrefixError: {source}"))]

@@ -1,7 +1,7 @@
-use super::{collections::OrdValTreeMap, path};
+use super::path;
 use rs_merkle::{Hasher, MerkleTree};
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     fs::File,
     io::{self, Read},
     path::Path,
@@ -25,37 +25,19 @@ impl Hasher for Blake3 {
     }
 }
 
-// TODO use File and Reader to hash contents not read_dir
-
-/// Calculates a hash with all the files under the given path
-// pub fn hash_path<P: AsRef<Path>, H: Hasher>(path: P, state: &mut H) -> io::Result<()> {
-//     let path = path.as_ref();
-//     if path.is_dir() {
-//         path.read_dir()?
-//             .map(|res| match res {
-//                 Ok(entry) => hash_path(entry.path(), state),
-//                 Err(e) => Err(e.into()),
-//             })
-//             .collect::<io::Result<()>>()
-//     } else {
-//         std::fs::read(path)?.hash(state);
-//         Ok(())
-//     }
-// }
-
 // TODO: use PartialTrees and merge them when we get to upper directories
 
 #[derive(Debug)]
 pub struct PackageHash {
     pub root: PackageId,
-    pub trees: OrdValTreeMap<ObjectId, Tree>,
-    pub blobs: HashMap<ObjectId, Blob>,
+    pub trees: BTreeMap<Tree, ObjectId>,
+    pub blobs: BTreeMap<Blob, ObjectId>,
 }
 
 impl PackageHash {
     pub fn from_path<P: AsRef<Path>>(path: P, package_name: &str) -> io::Result<Self> {
-        let mut trees = OrdValTreeMap::new();
-        let mut blobs = HashMap::new();
+        let mut trees = BTreeMap::new();
+        let mut blobs = BTreeMap::new();
 
         let mut tree = MerkleTree::<Blake3>::new();
         let mut dir_children: Vec<RawId> = Vec::new();
@@ -89,7 +71,7 @@ impl PackageHash {
                 dir_children.push(hash);
 
                 let path = path::relative_path_between(root_path, path)?;
-                blobs.insert(hash.into(), Blob::new(path));
+                blobs.insert(Blob::new(path), hash.into());
             } else if path.is_dir() {
                 let name = path.file_name().unwrap().to_str().unwrap();
 
@@ -110,7 +92,6 @@ impl PackageHash {
                 };
 
                 trees.insert(
-                    root.into(),
                     Tree::new(
                         path,
                         inner_children
@@ -118,6 +99,7 @@ impl PackageHash {
                             .map(Into::into)
                             .collect::<Vec<ObjectId>>(),
                     ),
+                    root.into(),
                 );
             } else if path.is_symlink() {
                 todo!()
@@ -126,51 +108,6 @@ impl PackageHash {
         unreachable!()
     }
 }
-
-// pub fn hash_path_to_root_leaves<P: AsRef<Path>>(path: P) -> io::Result<(ObjectId, Vec<ObjectId>)> {
-//     use io::{Error, ErrorKind};
-//     let mut leaves = Vec::new();
-//     let mut tree = MerkleTree::<Blake3>::new();
-
-//     let root = path.as_ref();
-
-//     if root.is_file() {
-//         return Err(Error::new(ErrorKind::InvalidData, "Expected Directory"));
-//     }
-
-//     for entry in WalkDir::new(root).contents_first(true) {
-//         let entry = entry?;
-//         let path = entry.path();
-
-//         if path == root {
-//             break;
-//         } else if path.is_file() {
-//             let mut file = File::open(path)?;
-//             let mut buf = Vec::new();
-//             file.read(&mut buf)?;
-
-//             let id = Blake3::hash(buf.as_slice());
-//             tree.insert(id);
-//             leaves.push(id);
-//         } else if path.is_dir() {
-//             let name = path
-//                 .file_name()
-//                 .ok_or(Error::new(ErrorKind::Other, "Terminating path"))?
-//                 .to_str()
-//                 .ok_or(Error::new(ErrorKind::InvalidData, "Invalid Utf-8"))?;
-
-//             let id = Blake3::hash(name.as_bytes());
-
-//             tree.insert(id);
-//             tree.commit();
-//             let root = unsafe { tree.root().unwrap_unchecked() };
-
-//             leaves.push(root);
-//         }
-//     }
-
-//     Ok(tree.proof(leaf_indices))
-// }
 
 #[cfg(test)]
 mod tests {

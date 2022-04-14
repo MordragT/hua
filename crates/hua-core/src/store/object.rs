@@ -1,3 +1,4 @@
+use super::ObjectId;
 use relative_path::RelativePathBuf;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -6,8 +7,6 @@ use std::{
     fmt,
     path::{Path, PathBuf},
 };
-
-use super::{ObjectId, PackageId};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Blob {
@@ -26,7 +25,7 @@ impl Blob {
 
 impl fmt::Display for Blob {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", &self.path)
+        write!(f, "Blob: {}", &self.path)
     }
 }
 
@@ -46,6 +45,12 @@ impl Tree {
     }
 }
 
+impl fmt::Display for Tree {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Tree: {}\n{:#?}", &self.path, &self.children)
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Link {
     pub link: RelativePathBuf,
@@ -59,6 +64,12 @@ impl Link {
 
     pub fn to_path<P: AsRef<Path>>(&self, base: P) -> PathBuf {
         self.link.to_path(base)
+    }
+}
+
+impl fmt::Display for Link {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Link: {} <- {}", &self.link, &self.source)
     }
 }
 
@@ -156,6 +167,16 @@ impl Object {
     }
 }
 
+impl fmt::Display for Object {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Link(link) => write!(f, "Object {link}"),
+            Self::Tree(tree) => write!(f, "Object {tree}"),
+            Self::Blob(blob) => write!(f, "Object {blob}"),
+        }
+    }
+}
+
 impl Ord for Object {
     fn cmp(&self, other: &Self) -> Ordering {
         match (&self, other) {
@@ -196,28 +217,9 @@ impl From<Link> for Object {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ObjectExt {
-    pub links: HashMap<PackageId, Link>,
-    // pub package_id: PackageId,
-}
-
-impl ObjectExt {
-    pub fn new() -> Self {
-        Self {
-            links: HashMap::new(),
-            // package_id,
-        }
-    }
-    pub fn with_links(links: HashMap<PackageId, Link>) -> Self {
-        Self { links }
-    }
-}
-
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct Objects {
     nodes: HashMap<ObjectId, Object>,
-    extensions: HashMap<ObjectId, ObjectExt>,
 }
 
 impl Objects {
@@ -227,18 +229,6 @@ impl Objects {
 
     pub fn contains(&self, id: &ObjectId) -> bool {
         self.nodes.contains_key(id)
-    }
-
-    pub fn get_ext(&self, id: &ObjectId) -> Option<&ObjectExt> {
-        self.extensions.get(id)
-    }
-
-    pub fn get_ext_mut(&mut self, id: &ObjectId) -> Option<&mut ObjectExt> {
-        self.extensions.get_mut(id)
-    }
-
-    pub unsafe fn get_ext_mut_unchecked(&mut self, id: &ObjectId) -> &mut ObjectExt {
-        self.get_ext_mut(id).unwrap_unchecked()
     }
 
     pub fn get(&self, id: &ObjectId) -> Option<&Object> {
@@ -253,58 +243,25 @@ impl Objects {
         self.get(id).unwrap_unchecked()
     }
 
-    pub fn get_full(&self, id: &ObjectId) -> Option<(&Object, &ObjectExt)> {
-        if let Some(object) = self.get(id) {
-            self.get_ext(id).map(|ext| (object, ext))
-        } else {
-            None
-        }
-    }
-
-    pub fn get_full_mut(&mut self, id: &ObjectId) -> Option<(&mut Object, &mut ObjectExt)> {
-        if let Some(object) = self.nodes.get_mut(id) {
-            self.extensions.get_mut(id).map(|ext| (object, ext))
-        } else {
-            None
-        }
-    }
-
-    pub unsafe fn get_full_unchecked(&self, id: &ObjectId) -> (&Object, &ObjectExt) {
-        self.get_full(id).unwrap_unchecked()
-    }
-
-    pub unsafe fn get_full_mut_unchecked(
-        &mut self,
-        id: &ObjectId,
-    ) -> (&mut Object, &mut ObjectExt) {
-        self.get_full_mut(id).unwrap_unchecked()
+    pub unsafe fn get_mut_unchecked(&mut self, id: &ObjectId) -> &mut Object {
+        self.get_mut(id).unwrap_unchecked()
     }
 
     pub fn remove_objects<'a>(
         &'a mut self,
         ids: impl IntoIterator<Item = &'a ObjectId> + 'a,
-    ) -> impl Iterator<Item = Option<(ObjectId, Object, ObjectExt)>> + 'a {
-        ids.into_iter().map(|id| {
-            let object = self.nodes.remove(id);
-            let ext = self.extensions.remove(id);
-
-            if let Some(object) = object && let Some(ext) = ext {
-                Some((*id, object, ext))
-            } else {
-                None
-            }
-        })
+    ) -> impl Iterator<Item = Option<(ObjectId, Object)>> + 'a {
+        ids.into_iter()
+            .map(|id| self.nodes.remove(id).map(|object| (*id, object)))
     }
 
     pub unsafe fn remove_objects_unchecked<'a>(
         &'a mut self,
         ids: impl IntoIterator<Item = &'a ObjectId> + 'a,
-    ) -> impl Iterator<Item = (ObjectId, Object, ObjectExt)> + 'a {
+    ) -> impl Iterator<Item = (ObjectId, Object)> + 'a {
         ids.into_iter().map(|id| {
             let object = self.nodes.remove(id);
-            let ext = self.extensions.remove(id);
-
-            (*id, object.unwrap_unchecked(), ext.unwrap_unchecked())
+            (*id, object.unwrap_unchecked())
         })
     }
     pub fn read_objects<'a, P, R>(
@@ -313,11 +270,11 @@ impl Objects {
         mut predicate: P,
     ) -> impl Iterator<Item = R> + 'a
     where
-        P: FnMut(&Object, &ObjectExt) -> R + 'a,
+        P: FnMut(&ObjectId, &Object) -> R + 'a,
     {
         ids.into_iter().map(move |id| {
-            let (object, ext) = unsafe { self.get_full_unchecked(id) };
-            predicate(object, ext)
+            let object = unsafe { self.get_unchecked(id) };
+            predicate(id, object)
         })
     }
 
@@ -327,35 +284,16 @@ impl Objects {
         mut predicate: P,
     ) -> impl Iterator<Item = R> + 'a
     where
-        P: FnMut(&mut Object, &mut ObjectExt) -> R + 'a,
+        P: FnMut(&ObjectId, &mut Object) -> R + 'a,
     {
         ids.into_iter().map(move |id| {
-            let (object, ext) = unsafe { self.get_full_mut_unchecked(&id) };
-            predicate(object, ext)
+            let object = unsafe { self.get_mut_unchecked(&id) };
+            predicate(id, object)
         })
     }
 
     pub fn insert(&mut self, object_id: ObjectId, object: Object) -> Option<Object> {
-        if let Some(old) = self.nodes.insert(object_id, object) {
-            Some(old)
-        } else {
-            self.extensions.insert(object_id, ObjectExt::new());
-            None
-        }
-    }
-
-    pub fn insert_full(
-        &mut self,
-        object_id: ObjectId,
-        object: Object,
-        ext: ObjectExt,
-    ) -> Option<Object> {
-        if let Some(old) = self.nodes.insert(object_id, object) {
-            Some(old)
-        } else {
-            self.extensions.insert(object_id, ext);
-            None
-        }
+        self.nodes.insert(object_id, object)
     }
 
     pub fn get_blobs<'a>(
@@ -383,63 +321,4 @@ impl Objects {
             }
         })
     }
-
-    // pub fn get_foreign_links<'a>(
-    //     &'a self,
-    //     package_id: &'a PackageId,
-    // ) -> impl Iterator<Item = (PackageId, ObjectId, &'a Link)> + 'a {
-    //     self.extensions
-    //         .iter()
-    //         .filter_map(|(id, ext)| {
-    //             if ext.package_id == *package_id && ext.links.len() > 0 {
-    //                 Some(
-    //                     ext.links
-    //                         .iter()
-    //                         .map(|(package_id, link)| (*package_id, *id, link)),
-    //                 )
-    //             } else {
-    //                 None
-    //             }
-    //         })
-    //         .flatten()
-    // }
-
-    // pub fn insert_link(
-    //     &mut self,
-    //     src_object: &ObjectId,
-    //     target_package: PackageId,
-    //     link: PathBuf,
-    // ) -> bool {
-    //     if let Some(ext) = self.extensions.get_mut(src_object) {
-    //         ext.links.insert(target_package, link);
-    //         true
-    //     } else {
-    //         false
-    //     }
-    // }
-
-    // pub fn remove_tree_children_links(
-    //     &mut self,
-    //     tree_id: &ObjectId,
-    //     target_package: &PackageId,
-    // ) -> Option<Vec<PathBuf>> {
-    //     let children = match self.nodes.get(tree_id) {
-    //         Some(Object::Tree { path: _, children }) => Some(children),
-    //         _ => None,
-    //     };
-
-    //     let mut result = Vec::new();
-
-    //     if let Some(children) = children {
-    //         for child in children {
-    //             let ext = unsafe { self.extensions.get_mut(&child).unwrap_unchecked() };
-    //             if let Some(link) = ext.links.remove(target_package) {
-    //                 result.push(link);
-    //             }
-    //         }
-    //         Some(result)
-    //     } else {
-    //         None
-    //     }
-    // }
 }

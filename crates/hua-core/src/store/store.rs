@@ -1,7 +1,6 @@
 use crate::{dependency::Requirement, extra::path::ComponentPathBuf, user::UserManager};
 use std::{
-    assert_matches::assert_matches,
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::HashSet,
     fs::{self},
     os::unix,
     path::{Path, PathBuf},
@@ -76,18 +75,6 @@ impl<B: Backend> Store<B> {
         }
     }
 
-    // pub fn find_children_by_requirement(
-    //     &self,
-    //     requirement: &Requirement,
-    // ) -> Option<&HashSet<ObjectId>> {
-    //     if let Some((id, _desc)) = self.find_by_requirement(requirement) {
-    //         let children = unsafe { self.get_children(id).unwrap_unchecked() };
-    //         Some(children)
-    //     } else {
-    //         None
-    //     }
-    // }
-
     pub fn matches<'a>(
         &'a self,
         requirement: &'a Requirement,
@@ -136,35 +123,6 @@ impl<B: Backend> Store<B> {
         }
     }
 
-    // pub fn find_by_requirement(
-    //     &self,
-    //     requirement: &Requirement,
-    // ) -> Option<(&PackageId, &PackageDesc)> {
-    //     self.nodes
-    //         .iter()
-    //         .find(|(_id, desc)| desc.matches(requirement))
-    // }
-
-    fn solve_objects(
-        id: ObjectId,
-        trees: &HashMap<ObjectId, Tree>,
-        blobs: &HashMap<ObjectId, Blob>,
-        resolved: &mut HashSet<ObjectId>,
-    ) -> bool {
-        if let Some(tree) = trees.get(&id) {
-            resolved.insert(id);
-            for child in &tree.children {
-                Self::solve_objects(*child, trees, blobs, resolved);
-            }
-            true
-        } else if let Some(_blob) = blobs.get(&id) {
-            resolved.insert(id);
-            true
-        } else {
-            false
-        }
-    }
-
     /// Inserts a package into the store and returns true if the package was not present and was inserted
     /// and false if it was already present.
     pub fn insert<P: AsRef<Path>>(&mut self, package: Package, path: P) -> StoreResult<bool> {
@@ -193,65 +151,43 @@ impl<B: Backend> Store<B> {
         if self.packages().contains(&package_id) {
             Ok(false)
         } else {
-            let mut resolved = HashSet::new();
             let mut object_ids: HashSet<ObjectId> = HashSet::new();
 
-            let trees_map = trees.indices;
-
             // should be ordered (by BTreeMap and Object::cmp) so that trees with lower depth come first
-            for (tree, id) in trees.tree.into_iter() {
+            for (tree, id) in trees {
                 let dest = tree.to_path(&path_in_store);
+                fs::create_dir(&dest).context(CreateTreeSnafu { path: dest })?;
+                object_ids.insert(id);
 
-                if resolved.contains(&id) {
-                    continue;
-                } else if self.objects().contains(&id) {
-                    let original = self
-                        .get_full_object_path(&id)
-                        .ok_or(StoreError::ObjectNotFoundById { id })?;
-
-                    unix::fs::symlink(&original, &dest).context(LinkObjectsSnafu {
-                        kind: ObjectKind::Tree,
-                        original,
-                        link: dest,
-                    })?;
-                    Self::solve_objects(id, &trees_map, &blobs, &mut resolved);
-
-                    let ext = unsafe { self.objects_mut().get_ext_mut_unchecked(&id) };
-                    assert!(ext
-                        .links
-                        .insert(package_id, Link::new(tree.path.clone(), id))
-                        .is_none());
-                    object_ids.insert(id);
-                } else {
-                    fs::create_dir(&dest).context(CreateTreeSnafu { path: dest })?;
-
-                    let old = self.objects_mut().insert(id, tree.into());
-                    assert!(old.is_none());
-                    object_ids.insert(id);
+                if !self.objects().contains(&id) {
+                    self.objects_mut().insert(id, tree.into());
                 }
             }
 
-            for (id, blob) in blobs {
+            for (blob, id) in blobs {
                 let dest = blob.to_path(&path_in_store);
 
-                if resolved.contains(&id) {
-                    continue;
-                } else if self.objects().contains(&id) {
-                    let original = self
-                        .get_full_object_path(&id)
-                        .ok_or(StoreError::ObjectNotFoundById { id })?;
-
-                    unix::fs::symlink(&original, &dest).context(LinkObjectsSnafu {
-                        kind: ObjectKind::Blob,
-                        original,
-                        link: dest,
-                    })?;
-
-                    let ext = unsafe { self.objects_mut().get_ext_mut_unchecked(&id) };
-                    assert!(ext
-                        .links
-                        .insert(package_id, Link::new(blob.path, id))
-                        .is_none());
+                if self.objects().contains(&id) {
+                    // Object is saved under other package
+                    if let Some(original) = self.get_full_object_path(&id) {
+                        fs::hard_link(&original, &dest).context(LinkObjectsSnafu {
+                            kind: ObjectKind::Blob,
+                            original,
+                            link: dest,
+                        })?;
+                    } else {
+                        // Object is saved under current package
+                        let object = unsafe { self.objects().get_unchecked(&id) };
+                        if let original = object.to_path(&path_in_store) && original.exists() {
+                            fs::hard_link(&original, &dest).context(LinkObjectsSnafu {
+                                kind: ObjectKind::Blob,
+                                original,
+                                link: dest,
+                            })?;
+                        } else {
+                            return Err(StoreError::ObjectNotRetrievable { object: object.clone() })
+                        }
+                    }
                     object_ids.insert(id);
                 } else {
                     let source = blob.to_path(&path);
@@ -304,7 +240,7 @@ impl<B: Backend> Store<B> {
         let object_ids = unsafe { self.packages().get_children(package_id).unwrap_unchecked() };
 
         self.objects()
-            .read_objects(object_ids, |object, _ext| match object.kind() {
+            .read_objects(object_ids, |_id, object| match object.kind() {
                 ObjectKind::Blob | ObjectKind::Link => {
                     let absolute = object.to_path(&root);
                     let relative = absolute.strip_prefix(&root).context(StripPrefixSnafu)?;
@@ -356,20 +292,6 @@ impl<B: Backend> Store<B> {
         Ok(())
     }
 
-    fn remove(
-        &mut self,
-        package_id: &PackageId,
-    ) -> Option<(PackageDesc, Vec<(ObjectId, Object, ObjectExt)>)> {
-        if let Some((desc, object_ids)) = self.packages_mut().remove(package_id) {
-            let objects =
-                unsafe { self.objects_mut().remove_objects_unchecked(&object_ids) }.collect();
-
-            Some((desc, objects))
-        } else {
-            None
-        }
-    }
-
     /// Remove all packages that are currently unused in all generations.
     pub fn remove_unused(&mut self, user_manager: &UserManager) -> StoreResult<Vec<PackageId>> {
         let used_packages = user_manager.packages().collect::<HashSet<&PackageId>>();
@@ -386,51 +308,6 @@ impl<B: Backend> Store<B> {
                     .path_in_store(&package_id, &self.path)
                     .unwrap_unchecked()
             };
-            let (_desc, objects) = unsafe { self.remove(package_id).unwrap_unchecked() };
-
-            for (object_id, mut object, mut ext) in objects {
-                let absolute_src = object.to_path(&root);
-                let mut links = ext.links.into_iter();
-
-                if let Some((target, link)) = links.next() {
-                    let target_root = unsafe {
-                        self.packages()
-                            .path_in_store(&target, &self.path)
-                            .unwrap_unchecked()
-                    };
-                    let dest = link.to_path(&target_root);
-
-                    match object.kind() {
-                        ObjectKind::Blob => {
-                            // Delete link
-                            fs::remove_file(&dest).context(IoSnafu)?;
-                            fs::copy(absolute_src, dest).context(IoSnafu)?;
-                        }
-                        ObjectKind::Tree => {
-                            fs::remove_dir(&dest).context(IoSnafu)?;
-                            fs_extra::dir::move_dir(
-                                absolute_src,
-                                dest,
-                                &fs_extra::dir::CopyOptions::default(),
-                            )
-                            .context(FsExtraSnafu)?;
-                        }
-                        ObjectKind::Link => todo!(),
-                    }
-
-                    ext.links = links.collect();
-
-                    object.replace_path(link.link);
-                    assert!(self
-                        .objects_mut()
-                        .insert_full(object_id, object, ext)
-                        .is_none());
-                    assert_matches!(
-                        self.packages_mut().insert_child(&target, object_id),
-                        Some(true)
-                    );
-                }
-            }
 
             fs::remove_dir_all(root).context(IoSnafu)?;
         }

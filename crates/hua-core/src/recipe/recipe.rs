@@ -4,7 +4,7 @@ use crate::{
     extra::hash::PackageHash,
     generation::GenerationBuilder,
     jail::{Bind, JailBuilder},
-    store::{Backend, Package, PackageDesc, Store, STORE_PATH},
+    store::{Backend, Package, PackageDesc, Store},
 };
 use cached_path::{Cache, Options};
 use fs_extra::dir::CopyOptions;
@@ -99,8 +99,6 @@ impl Recipe {
         Ok(self)
     }
 
-    // TODO JailBuilder as argument, so that users can provide envs or envs in recipe itself
-
     /// Link all dependencies temporarily and processes binaries
     /// for execution in the build phase.
     pub fn prepare_requirements<B: Backend, L: AsRef<str>, R: AsRef<str>>(
@@ -165,9 +163,6 @@ impl Recipe {
         script_file.write(script.as_bytes()).context(IoSnafu)?;
 
         let mut process = jail
-            // .file(script_file.as_raw_fd(), BUILD_SCRIPT_PATH, 544)
-            // .arg("sh")
-            // .arg(BUILD_SCRIPT_PATH)
             .bind(Bind::read_only(script_path, BUILD_SCRIPT_PATH))
             .arg("sh")
             .arg(BUILD_SCRIPT_PATH)
