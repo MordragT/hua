@@ -1,3 +1,8 @@
+use crate::{
+    dependency::Requirement,
+    recipe::Recipe,
+    store::{Blob, LocalBackend, Store, STORE_PATH},
+};
 use cached_path::CacheBuilder;
 use relative_path::RelativePathBuf;
 use semver::{Version, VersionReq};
@@ -7,8 +12,6 @@ use std::{
     os::raw::{c_char, c_size_t},
     str::Utf8Error,
 };
-
-use crate::{Blob, LocalBackend, Recipe, Requirement, Store, STORE_PATH};
 
 #[derive(Debug, Snafu)]
 

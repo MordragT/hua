@@ -1,8 +1,11 @@
 use std::{
     io,
+    os::unix::prelude::RawFd,
     path::{Path, PathBuf},
     process::{Child, Command},
 };
+
+use command_fds::{CommandFdExt, FdMapping};
 
 #[derive(Debug)]
 pub enum Bind {
@@ -13,7 +16,6 @@ pub enum Bind {
     TmpFs { path: PathBuf },
     Proc { path: PathBuf },
     Dir { path: PathBuf },
-    File { content: String, path: PathBuf },
 }
 
 impl Bind {
@@ -56,12 +58,6 @@ impl Bind {
             path: path.as_ref().to_owned(),
         }
     }
-    pub fn file<C: AsRef<str>, P: AsRef<Path>>(content: C, path: P) -> Self {
-        Self::File {
-            content: content.as_ref().to_owned(),
-            path: path.as_ref().to_owned(),
-        }
-    }
     pub fn apply(&self, cmd: &mut Command) {
         match self {
             Self::Dev { src, dest } => cmd.arg("--dev-bind").arg(src).arg(dest),
@@ -71,12 +67,18 @@ impl Bind {
             Self::TmpFs { path } => cmd.arg("--tmpfs").arg(path),
             Self::Proc { path } => cmd.arg("--proc").arg(path),
             Self::Dir { path } => cmd.arg("--dir").arg(path),
-            Self::File { content, path } => cmd.arg("--file").arg(content).arg(path),
         };
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
+struct File {
+    child_fd: RawFd,
+    path: PathBuf,
+    permission: u32,
+}
+
+#[derive(Debug)]
 pub struct JailBuilder {
     args: Vec<String>,
     binds: Vec<Bind>,
@@ -84,6 +86,25 @@ pub struct JailBuilder {
     envs_remove: Vec<(String, String)>,
     env_clear: bool,
     current_dir: Option<PathBuf>,
+    fd_mappings: Vec<FdMapping>,
+    files: Vec<File>,
+    fd_counter: RawFd,
+}
+
+impl Default for JailBuilder {
+    fn default() -> Self {
+        Self {
+            args: Vec::new(),
+            binds: Vec::new(),
+            envs: Vec::new(),
+            envs_remove: Vec::new(),
+            env_clear: false,
+            current_dir: None,
+            fd_mappings: Vec::new(),
+            files: Vec::new(),
+            fd_counter: 150,
+        }
+    }
 }
 
 impl JailBuilder {
@@ -101,6 +122,25 @@ impl JailBuilder {
     }
     pub fn bind(mut self, bind: Bind) -> Self {
         self.binds.push(bind);
+        self
+    }
+    // TODO not working fix or remove
+    pub fn file<P: AsRef<Path>>(mut self, parent_fd: RawFd, path: P, permission: u32) -> Self {
+        self.fd_counter += 1;
+        let child_fd = self.fd_counter;
+        let file = File {
+            child_fd,
+            path: path.as_ref().to_owned(),
+            permission,
+        };
+        let mapping = FdMapping {
+            parent_fd,
+            child_fd,
+        };
+
+        self.fd_mappings.push(mapping);
+        self.files.push(file);
+
         self
     }
     pub fn env<L: AsRef<str>, R: AsRef<str>>(mut self, variable: L, value: R) -> Self {
@@ -150,6 +190,15 @@ impl JailBuilder {
             bind.apply(&mut bwrap);
         }
 
+        for file in self.files {
+            bwrap
+                .arg("--perms")
+                .arg(file.permission.to_string())
+                .arg("--file")
+                .arg(file.child_fd.to_string())
+                .arg(file.path);
+        }
+
         if let Some(dir) = self.current_dir {
             bwrap.arg("--chdir").arg(dir);
         }
@@ -157,6 +206,10 @@ impl JailBuilder {
         for arg in &self.args {
             bwrap.arg(arg);
         }
+
+        bwrap
+            .fd_mappings(self.fd_mappings)
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
 
         bwrap.spawn()
     }

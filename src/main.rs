@@ -1,12 +1,16 @@
-use std::{error::Error, fs};
+#![feature(let_chains)]
 
 use clap::{arg, Command};
-use hua_core::{Package, Store, UserManager, Version};
+use hua_core::{
+    extra::path::ComponentPathBuf,
+    store::{Store, STORE_PATH},
+    user::UserManager,
+};
+use std::{error::Error, fs, path::PathBuf};
 
-const HUA_PATH: &str = "hua";
-const STORE_PATH: &str = "hua/store";
-const USER_MANAGER_PATH: &str = "hua/user";
-const GLOBAL_PATH: &str = "global";
+const HUA_PATH: &str = "/hua";
+const USER_MANAGER_PATH: &str = "/hua/user";
+const GLOBAL_PATH: &str = "/usr";
 
 fn main() -> Result<(), Box<dyn Error>> {
     let matches = Command::new("hua")
@@ -51,12 +55,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     match matches.subcommand() {
         Some(("init", _)) => {
             fs::create_dir(HUA_PATH)?;
-            fs::create_dir(GLOBAL_PATH)?;
 
-            let global_paths = ComponentPaths::from_path(GLOBAL_PATH);
+            if let path = PathBuf::from(GLOBAL_PATH) && !path.exists() {
+                fs::create_dir(path)?;
+            }
+
+            let global_paths = ComponentPathBuf::from_path(GLOBAL_PATH);
             global_paths.create_dirs()?;
 
-            let _store = Store::create_at_path(STORE_PATH)?;
+            let _store = Store::init(STORE_PATH)?;
             let _user_manager = UserManager::create_at_path(USER_MANAGER_PATH)?;
             println!("Files and folders created!");
         }
@@ -66,9 +73,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .value_of("NAME")
                     .expect("When searching the store a package name has to be given.");
                 let store = Store::open(STORE_PATH)?;
-                if let Some(package) = store.find_by_name(name) {
-                    let index = unsafe { store.get_unchecked_index_of(&package) };
-                    println!("Index {index}: {package}");
+                if let Some((id, desc)) = store.packages().find_by_name(name) {
+                    println!("Index {id}: {desc}");
                 }
                 println!("Package not found");
             }

@@ -1,8 +1,10 @@
 use super::*;
-use crate::extra::path::ComponentPathBuf;
-use crate::store::{Backend, PackageId};
-use crate::Store;
-use crate::{extra, Generation, GenerationBuilder, Requirement};
+use crate::{
+    dependency::Requirement,
+    extra::{self, path::ComponentPathBuf},
+    generation::{Generation, GenerationBuilder},
+    store::{Backend, PackageId, Store},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::{

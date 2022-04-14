@@ -8,12 +8,11 @@ mod step;
 
 pub use dependency_graph::DependencyGraph;
 pub use requirement::Requirement;
-pub use step::Step;
 
 // TODO: Tests
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub enum Conflict<'a> {
+enum Conflict<'a> {
     Name(&'a String),
     Blob(&'a Blob),
 }

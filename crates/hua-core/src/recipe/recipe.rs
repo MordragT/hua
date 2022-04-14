@@ -1,9 +1,10 @@
 use super::*;
 use crate::{
+    dependency::Requirement,
     extra::hash::PackageHash,
+    generation::GenerationBuilder,
     jail::{Bind, JailBuilder},
-    store::Backend,
-    GenerationBuilder, Package, Requirement, Store, STORE_PATH,
+    store::{Backend, Package, PackageDesc, Store, STORE_PATH},
 };
 use cached_path::{Cache, Options};
 use fs_extra::dir::CopyOptions;
@@ -21,7 +22,7 @@ use temp_dir::TempDir;
 // TODO: implement patches, allow multiple sources ?
 
 pub const BUILD_PATH: &str = "/tmp/build/";
-pub const BUILD_SCRIPT_PATH: &str = "/tmp/build/build.sh";
+pub const BUILD_SCRIPT_PATH: &str = "/tmp/build.sh";
 
 /// A Recipe to build an Package from.
 #[derive(Debug)]
@@ -133,7 +134,7 @@ impl Recipe {
 
         let jail = JailBuilder::new()
             .bind(Bind::read_only("/bin", "/bin"))
-            .bind(Bind::read_only(STORE_PATH, STORE_PATH))
+            //.bind(Bind::read_only(STORE_PATH, STORE_PATH))
             .bind(Bind::read_only(&tmp_gen_paths.binary, "/usr/bin/"))
             .bind(Bind::read_only(&tmp_gen_paths.library, "/usr/lib/"))
             .bind(Bind::read_only(&tmp_gen_paths.share, "/usr/share/"))
@@ -158,8 +159,16 @@ impl Recipe {
         let jail = self.jail.ok_or(RecipeError::MissingJail)?;
         let build_dir = self.build_dir.ok_or(RecipeError::MissingSourceFiles)?;
 
+        let temp_dir = TempDir::new().context(IoSnafu)?;
+        let script_path = temp_dir.child(&self.name);
+        let mut script_file = File::create(&script_path).context(IoSnafu)?;
+        script_file.write(script.as_bytes()).context(IoSnafu)?;
+
         let mut process = jail
-            .bind(Bind::file(script, BUILD_SCRIPT_PATH))
+            // .file(script_file.as_raw_fd(), BUILD_SCRIPT_PATH, 544)
+            // .arg("sh")
+            // .arg(BUILD_SCRIPT_PATH)
+            .bind(Bind::read_only(script_path, BUILD_SCRIPT_PATH))
             .arg("sh")
             .arg(BUILD_SCRIPT_PATH)
             .run()
@@ -177,18 +186,18 @@ impl Recipe {
             blobs: _,
         } = PackageHash::from_path(&absolute_target_dir, &self.name).context(IoSnafu)?;
 
-        let package = Package::new(
-            root,
+        let desc = PackageDesc::new(
             self.name,
             self.desc,
             self.version,
             self.licenses,
             self.requires,
         );
+        let package = Package::new(root, desc);
 
         let toml = toml::to_vec(&package).context(TomlSerilizationSnafu)?;
 
-        let lock_path = PathBuf::from(format!("{}.lock", &package.name));
+        let lock_path = PathBuf::from(format!("{}.lock", package.name()));
         if lock_path.exists() {
             fs::remove_file(&lock_path).context(IoSnafu)?;
         }
@@ -201,7 +210,7 @@ impl Recipe {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::{collections::HashSet, fs};
 
     use cached_path::CacheBuilder;
     use relative_path::RelativePathBuf;
@@ -209,9 +218,8 @@ mod tests {
     use temp_dir::TempDir;
 
     use crate::{
-        recipe::{LINUX, X86, X86_64},
-        store::LocalBackend,
-        Recipe, Store,
+        recipe::{Recipe, LINUX, X86, X86_64},
+        store::{LocalBackend, Store},
     };
 
     #[test]
@@ -247,6 +255,7 @@ mod tests {
         let cache = CacheBuilder::new().build().unwrap();
 
         let recipe_path = temp_dir.child("recipe");
+        fs::create_dir(&recipe_path).unwrap();
         std::env::set_current_dir(recipe_path).unwrap();
 
         let (package, path) = recipe

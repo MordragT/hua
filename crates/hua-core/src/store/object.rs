@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
     collections::HashMap,
+    fmt,
     path::{Path, PathBuf},
 };
 
@@ -20,6 +21,12 @@ impl Blob {
 
     pub fn to_path<P: AsRef<Path>>(&self, base: P) -> PathBuf {
         self.path.to_path(base)
+    }
+}
+
+impl fmt::Display for Blob {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", &self.path)
     }
 }
 
@@ -350,6 +357,33 @@ impl Objects {
             None
         }
     }
+
+    pub fn get_blobs<'a>(
+        &'a self,
+        ids: impl IntoIterator<Item = &'a ObjectId>,
+    ) -> impl Iterator<Item = &'a Blob> {
+        ids.into_iter().filter_map(|id| {
+            if let Some(object) = self.nodes.get(id) {
+                object.as_blob()
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn get_blobs_cloned<'a>(
+        &'a self,
+        ids: impl IntoIterator<Item = &'a ObjectId> + 'a,
+    ) -> impl Iterator<Item = Blob> + 'a {
+        ids.into_iter().filter_map(move |id| {
+            if let Some(object) = self.nodes.get(id) {
+                object.clone().into_blob()
+            } else {
+                None
+            }
+        })
+    }
+
     // pub fn get_foreign_links<'a>(
     //     &'a self,
     //     package_id: &'a PackageId,

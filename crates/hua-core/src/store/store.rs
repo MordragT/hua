@@ -1,4 +1,4 @@
-use crate::{extra::path::ComponentPathBuf, UserManager};
+use crate::{dependency::Requirement, extra::path::ComponentPathBuf, user::UserManager};
 use std::{
     assert_matches::assert_matches,
     collections::{BTreeSet, HashMap, HashSet},
@@ -11,6 +11,7 @@ use super::*;
 
 /// The filename of the packages database of the store
 pub const PACKAGES_DB: &str = "packages.db";
+pub const STORE_PATH: &str = "/hua/store/";
 
 /// A Store that contains all the packages installed by any user
 /// Content Addressable Store
@@ -75,6 +76,75 @@ impl<B: Backend> Store<B> {
         }
     }
 
+    // pub fn find_children_by_requirement(
+    //     &self,
+    //     requirement: &Requirement,
+    // ) -> Option<&HashSet<ObjectId>> {
+    //     if let Some((id, _desc)) = self.find_by_requirement(requirement) {
+    //         let children = unsafe { self.get_children(id).unwrap_unchecked() };
+    //         Some(children)
+    //     } else {
+    //         None
+    //     }
+    // }
+
+    pub fn matches<'a>(
+        &'a self,
+        requirement: &'a Requirement,
+    ) -> impl Iterator<
+        Item = (
+            &'a PackageId,
+            &'a PackageDesc,
+            impl Iterator<Item = &'a Blob>,
+        ),
+    > + '_ {
+        self.packages()
+            .filter(|_id, desc, _objects| {
+                requirement.name() == &desc.name && requirement.version_req().matches(&desc.version)
+            })
+            .filter_map(|(id, desc, objects)| {
+                // TODO find a way to not get blobs two times
+
+                let blobs = self.objects().get_blobs_cloned(objects).collect();
+                if requirement.blobs().is_subset(&blobs) {
+                    Some((id, desc, self.objects().get_blobs(objects)))
+                } else {
+                    None
+                }
+            })
+    }
+
+    pub fn is_matching(&self, package_id: &PackageId, requirement: &Requirement) -> bool {
+        if let Some((desc, objects)) = self.packages().get_full(package_id) {
+            let blobs = self.objects().get_blobs_cloned(objects).collect();
+            requirement.blobs().is_subset(&blobs)
+                && requirement.name() == &desc.name
+                && requirement.version_req().matches(&desc.version)
+        } else {
+            false
+        }
+    }
+
+    pub fn get_blobs_of_package<'a>(
+        &'a self,
+        package_id: &PackageId,
+    ) -> Option<impl Iterator<Item = &'a Blob>> {
+        if let Some(objects) = self.packages().get_children(package_id) {
+            Some(self.objects().get_blobs(objects))
+        } else {
+            None
+        }
+    }
+
+    // pub fn find_by_requirement(
+    //     &self,
+    //     requirement: &Requirement,
+    // ) -> Option<(&PackageId, &PackageDesc)> {
+    //     self.nodes
+    //         .iter()
+    //         .find(|(_id, desc)| desc.matches(requirement))
+    // }
+
     fn solve_objects(
         id: ObjectId,
         trees: &HashMap<ObjectId, Tree>,
@@ -109,14 +179,16 @@ impl<B: Backend> Store<B> {
 
         let Package {
             id: package_id,
+            desc,
+        } = package;
+
+        let PackageDesc {
             name,
             desc,
             version,
             licenses,
             requires,
-        } = package;
-
-        let mut pkg_blobs = BTreeSet::new();
+        } = desc;
 
         if self.packages().contains(&package_id) {
             Ok(false)
@@ -160,8 +232,6 @@ impl<B: Backend> Store<B> {
             }
 
             for (id, blob) in blobs {
-                pkg_blobs.insert(blob.clone());
-
                 let dest = blob.to_path(&path_in_store);
 
                 if resolved.contains(&id) {
@@ -201,7 +271,7 @@ impl<B: Backend> Store<B> {
                 .packages_mut()
                 .insert(
                     package_id,
-                    PackageDesc::new(name, desc, version, licenses, pkg_blobs, requires),
+                    PackageDesc::new(name, desc, version, licenses, requires),
                     object_ids
                 )
                 .is_none());
@@ -306,8 +376,8 @@ impl<B: Backend> Store<B> {
 
         let to_remove = self
             .packages()
-            .filter(|id, _desc| !used_packages.contains(id))
-            .map(|(id, _desc)| *id)
+            .filter(|id, _desc, _objects| !used_packages.contains(id))
+            .map(|(id, _desc, _objects)| *id)
             .collect::<Vec<PackageId>>();
 
         for package_id in &to_remove {
@@ -383,9 +453,9 @@ impl<B: Backend> Store<B> {
 
 #[cfg(test)]
 mod tests {
-    use super::PACKAGES_DB;
+    use super::{Store, PACKAGES_DB};
     use crate::{
-        extra::path::ComponentPathBuf, store::backend::LocalBackend, support::*, Store, UserManager,
+        extra::path::ComponentPathBuf, store::backend::LocalBackend, support::*, user::UserManager,
     };
     use std::{fs, path::Path};
     use temp_dir::TempDir;
@@ -472,7 +542,7 @@ mod tests {
         let two = pkg("two", &two_path);
 
         let two_id = two.id;
-        let one_req = to_req(&one);
+        let one_req = req("one", ">0.0.0");
 
         store.insert(one, one_path).unwrap();
         store.insert(two, two_path).unwrap();

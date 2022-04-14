@@ -1,11 +1,7 @@
+use crate::store::Blob;
 use semver::VersionReq;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fmt, fmt::Debug, hash::Hash};
-
-use crate::{
-    extra,
-    store::{Blob, PackageDesc},
-};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
 pub struct Requirement {
@@ -59,12 +55,12 @@ impl fmt::Display for Requirement {
     }
 }
 
-impl From<PackageDesc> for Requirement {
-    fn from(desc: PackageDesc) -> Self {
-        Self::new(
-            desc.name,
-            extra::exact_version_req(desc.version),
-            desc.blobs,
-        )
-    }
-}
+// impl From<PackageDesc> for Requirement {
+//     fn from(desc: PackageDesc) -> Self {
+//         Self::new(
+//             desc.name,
+//             extra::exact_version_req(desc.version),
+//             desc.blobs,
+//         )
+//     }
+// }

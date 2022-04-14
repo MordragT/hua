@@ -1,6 +1,3 @@
-/target
-/hua/
-/hello-rust/
-/global/
-/hello-world/
-/crates/hua-platform/host.o
+target/
+crates/hua-platform/host.o
+.vscode/

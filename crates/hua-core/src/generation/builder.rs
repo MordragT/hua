@@ -1,8 +1,9 @@
 use super::*;
-use crate::extra::path::ComponentPathBuf;
-use crate::store::{Backend, PackageId};
-use crate::Store;
-use crate::{DependencyGraph, Requirement};
+use crate::{
+    dependency::{DependencyGraph, Requirement},
+    extra::path::ComponentPathBuf,
+    store::{Backend, PackageId, Store},
+};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};

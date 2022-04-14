@@ -1,11 +1,8 @@
-use crate::{
-    store::{Backend, Blob, PackageDesc, PackageId},
-    Store,
-};
+use crate::store::{Backend, Blob, PackageDesc, PackageId, Store};
 use daggy::{Dag, NodeIndex};
 use std::collections::{HashMap, HashSet};
 
-use super::{Conflict, DependencyError, DependencyResult, Requirement, Step};
+use super::{step::Step, Conflict, DependencyError, DependencyResult, Requirement};
 
 #[derive(Debug)]
 pub struct DependencyGraph<'a> {
@@ -38,15 +35,16 @@ impl<'a> DependencyGraph<'a> {
         choices: &mut HashMap<&'a Requirement, NodeIndex<usize>>,
     ) -> DependencyResult<NodeIndex<usize>> {
         let options = store
-            .packages()
             .matches(req)
-            .collect::<HashMap<&PackageId, &PackageDesc>>();
+            .map(|(id, desc, blobs)| (id, (desc, blobs)))
+            .collect::<HashMap<&PackageId, (&PackageDesc, _)>>();
 
         let node = match options.len() {
             0 => self.relations.add_node(Step::Unresolved(req)),
             1 => {
-                let (id, package) = unsafe { options.into_iter().next().unwrap_unchecked() };
-                if let Some(conflict) = self.conflicts(package) {
+                let (id, (package, blobs)) =
+                    unsafe { options.into_iter().next().unwrap_unchecked() };
+                if let Some(conflict) = self.conflicts(&package.name, blobs) {
                     return Err(conflict)?;
                 }
 
@@ -91,8 +89,7 @@ impl<'a> DependencyGraph<'a> {
                     .inserted
                     .iter()
                     .filter_map(|(id, index)| {
-                        let package = unsafe { store.packages().get_unchecked(id) };
-                        if package.matches(req) {
+                        if store.is_matching(id, req) {
                             Some((*id, *index))
                         } else {
                             None
@@ -132,7 +129,8 @@ impl<'a> DependencyGraph<'a> {
 
             for id in options.iter() {
                 let package = unsafe { store.packages().get_unchecked(&id) };
-                if conflicts(&mut self.names, &mut self.objects, &package).is_none() {
+                let blobs = unsafe { store.get_blobs_of_package(id).unwrap_unchecked() };
+                if conflicts(&mut self.names, &mut self.objects, &package.name, blobs).is_none() {
                     *step = Step::Resolved(*id);
                     result = Some(package);
                     break;
@@ -161,8 +159,12 @@ impl<'a> DependencyGraph<'a> {
         }
     }
 
-    fn conflicts(&mut self, package: &'a PackageDesc) -> Option<Conflict> {
-        conflicts(&mut self.names, &mut self.objects, package)
+    fn conflicts(
+        &mut self,
+        name: &'a String,
+        blobs: impl Iterator<Item = &'a Blob>,
+    ) -> Option<Conflict> {
+        conflicts(&mut self.names, &mut self.objects, name, blobs)
     }
 
     pub fn unresolved_requirements(&self) -> impl Iterator<Item = &Requirement> {
@@ -206,13 +208,14 @@ impl<'a> DependencyGraph<'a> {
 fn conflicts<'a>(
     names: &mut HashSet<&'a String>,
     objects: &mut HashSet<&'a Blob>,
-    package: &'a PackageDesc,
+    name: &'a String,
+    blobs: impl Iterator<Item = &'a Blob>,
 ) -> Option<Conflict<'a>> {
-    if !names.insert(&package.name) {
-        return Some(Conflict::Name(&package.name));
+    if !names.insert(name) {
+        return Some(Conflict::Name(name));
     }
 
-    for blob in package.blobs.iter() {
+    for blob in blobs {
         if !objects.insert(blob) {
             return Some(Conflict::Blob(blob));
         }
@@ -222,9 +225,9 @@ fn conflicts<'a>(
 
 #[cfg(test)]
 mod tests {
-    use crate::store::{LocalBackend, StoreError};
+    use super::*;
+    use crate::store::{LocalBackend, Store, StoreError};
     use crate::support::*;
-    use crate::{dependency::DependencyError, DependencyGraph, Store};
     use std::assert_matches::assert_matches;
     use temp_dir::TempDir;
 
@@ -238,23 +241,21 @@ mod tests {
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
+        let one_req = req("one", ">0.0.0");
 
         let two_path = temp_dir.child("two");
-        let two = pkg_req("two", &two_path, [to_req(&one)]);
+        let two = pkg_req("two", &two_path, [one_req.clone()]);
+        let two_req = req("two", ">0.0.0");
 
         let three_path = temp_dir.child("three");
         let three = pkg("three", &three_path);
+        let three_req = req("three", ">0.0.0");
 
         let four_path = temp_dir.child("four");
-        let four = pkg_req(
-            "four",
-            &four_path,
-            [to_req(&one), to_req(&two), to_req(&three)],
-        );
+        let four = pkg_req("four", &four_path, [one_req.clone(), two_req, three_req]);
+        let req_four = req("four", ">0.0.0");
 
-        let req_four = to_req(&four);
-        let req_one = to_req(&one);
-        let reqs = vec![&req_four, &req_one];
+        let reqs = vec![&req_four, &one_req];
 
         let pkgs = vec![
             (one, one_path),
@@ -282,11 +283,12 @@ mod tests {
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
+        let one_req = req("one", ">0.0.0");
 
         let two_path = temp_dir.child("two");
         let two = pkg_req("two", &two_path, [req("other", ">1.0")]);
+        let two_req = req("two", ">0.0.0");
 
-        let (one_req, two_req) = (to_req(&one), to_req(&two));
         let reqs = vec![&one_req, &two_req];
         let pkgs = vec![(one, one_path), (two, two_path)];
         store
@@ -312,11 +314,12 @@ mod tests {
 
         let one_path = temp_dir.child("one");
         let one = pkg_req("one", &one_path, [req("two", ">=1.0")]);
+        let one_req = req("one", ">0.0.0");
 
         let two_path = temp_dir.child("two");
         let two = pkg_req("two", &two_path, [req("one", ">=1.0")]);
+        let two_req = req("two", ">0.0.0");
 
-        let (one_req, two_req) = (to_req(&one), to_req(&two));
         let reqs = vec![&one_req, &two_req];
         let pkgs = vec![(one, one_path), (two, two_path)];
         store
@@ -346,13 +349,13 @@ mod tests {
 
         let two_path = temp_dir.child("two");
         let two = pkg_req("two", &two_path, [req_one]);
+        let two_req = req("two", ">0.0.0");
 
         let three_path = temp_dir.child("three");
         let three = pkg_prov("one", &three_path, "other");
+        let three_req = req_comp("one", ">=1.0.0", [Blob::new("lib/other.so".into())]);
 
-        let req_three = to_req(&three);
-        let req_two = to_req(&two);
-        let reqs = vec![&req_two, &req_three];
+        let reqs = vec![&two_req, &three_req];
 
         let pkgs = vec![(one, one_path), (two, two_path), (three, three_path)];
         store
@@ -383,13 +386,13 @@ mod tests {
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
+        let one_req = req("one", ">0.0.0");
 
         let two_path = temp_dir.child("two");
         let two = pkg_prov("two", &two_path, "one");
+        let two_req = req_comp("two", ">0.0.0", [Blob::new("lib/one.so".into())]);
 
-        let req_one = to_req(&one);
-        let req_two = to_req(&two);
-        let reqs = vec![&req_two, &req_one];
+        let reqs = vec![&one_req, &two_req];
 
         let pkgs = vec![(one, one_path), (two, two_path)];
         store
@@ -397,10 +400,15 @@ mod tests {
             .collect::<Result<Vec<bool>, StoreError>>()
             .unwrap();
 
+        dbg!(&store);
+
         let err = graph
             .resolve(reqs, &store)
             .map(|iter| iter.count())
             .unwrap_err();
+
+        dbg!(&temp_dir);
+        temp_dir.leak();
 
         assert_matches!(err, DependencyError::ConflictingBlob { blob: _ });
     }

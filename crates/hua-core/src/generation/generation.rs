@@ -1,6 +1,4 @@
-use crate::extra::path::ComponentPathBuf;
-use crate::store::PackageId;
-use crate::Requirement;
+use crate::{dependency::Requirement, extra::path::ComponentPathBuf, store::PackageId};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::{

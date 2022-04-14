@@ -1,4 +1,4 @@
-use crate::{store::PackageId, Requirement};
+use crate::{dependency::Requirement, store::PackageId};
 use std::{collections::HashSet, fmt::Debug, hint::unreachable_unchecked};
 
 #[derive(Debug, PartialEq, Eq)]

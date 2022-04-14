@@ -1,7 +1,7 @@
 use crate::{
+    dependency::Requirement,
     extra::hash::PackageHash,
-    store::{Blob, PackageDesc},
-    Package, Requirement,
+    store::{Blob, Package, PackageDesc},
 };
 use relative_path::RelativePathBuf;
 use semver::{Version, VersionReq};
@@ -34,14 +34,15 @@ pub fn pkg_req_ver_prov<P: AsRef<Path>>(
         blobs: _,
     } = PackageHash::from_path(path, name).unwrap();
 
-    Package::new(
-        root,
+    let desc = PackageDesc::new(
         name.to_owned(),
         "Some package".to_owned(),
         Version::parse(version).unwrap(),
         vec!["MIT".to_owned()],
         requires.into_iter().collect(),
-    )
+    );
+
+    Package::new(root, desc)
 }
 
 #[allow(dead_code)]
@@ -66,13 +67,6 @@ pub fn pkg<P: AsRef<Path>>(name: &str, path: P) -> Package {
 #[allow(dead_code)]
 pub fn pkg_ver<P: AsRef<Path>>(name: &str, path: P, version: &str) -> Package {
     pkg_req_ver_prov(name, path, [], version, name)
-}
-
-#[deprecated]
-#[allow(dead_code)]
-pub fn to_req(package: &Package) -> Requirement {
-    let desc: PackageDesc = PackageDesc::from_package(package.clone(), []);
-    desc.into()
 }
 
 #[allow(dead_code)]

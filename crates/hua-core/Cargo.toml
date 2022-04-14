@@ -6,7 +6,7 @@ license = "MIT OR Apache-2.0"
 resolver = "2"
 
 [lib]
-crate-type = ["rlib", "cdylib"]
+crate-type = ["rlib"]
 
 [dependencies]
 users = "0.11"
@@ -27,4 +27,5 @@ walkdir = "2"
 fs_extra = "1.2"
 cached-path = { version = "0.5", default-features = false, features = ["rustls-tls"] }
 os_type = { git = "https://github.com/MordragT/os_type" }
-abi_stable = "0.10"
+command-fds = "0.2"
+console = "0.15"

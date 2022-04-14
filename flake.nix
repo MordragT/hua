@@ -35,30 +35,31 @@
 
     # `nix develop`
     devShell = pkgs.mkShell {
-      LLVM_SYS_120_PREFIX = "${llvmPkgs.llvm.dev}";
-      NIX_GLIBC_PATH = if pkgs.stdenv.isLinux then "${pkgs.glibc_multi.out}/lib" else "";
+      # LLVM_SYS_120_PREFIX = "${llvmPkgs.llvm.dev}";
+      # NIX_GLIBC_PATH = if pkgs.stdenv.isLinux then "${pkgs.glibc_multi.out}/lib" else "";
       # RUST_SRC_PATH = "${complete.rust-src}/lib/rustlib/src/rust/src";
-      LD_LIBRARY_PATH = with pkgs;
-        lib.makeLibraryPath
-        [ pkg-config stdenv.cc.cc.lib libffi ncurses zlib ];
+      # LD_LIBRARY_PATH = with pkgs;
+      #   lib.makeLibraryPath
+      #   [ pkg-config stdenv.cc.cc.lib libffi ncurses zlib ];
 
       nativeBuildInputs = with pkgs; [
         (toolchain.withComponents [
           "cargo" "rustc" "rust-src" "rustfmt" "clippy"    
         ])
-        xorg.libxcb
+        # xorg.libxcb
         openssl
         pkgconfig
         bubblewrap
-        llvmPkgs.clang
-        llvmPkgs.lld
-        llvmPkgs.llvm.dev
+        # llvmPkgs.clang
+        # llvmPkgs.lld
+        # llvmPkgs.llvm.dev
+        # lldb
         zig
-        (pkgs.writeShellScriptBin "roc" ''
-          #!/usr/bin/env sh
+        # (pkgs.writeShellScriptBin "roc" ''
+        #   #!/usr/bin/env sh
 
-          $HOME/.cargo/bin/roc $1 $2 $3 $4 $5 $6 $7
-        '')
+        #   $HOME/.cargo/bin/roc $@
+        # '')
       ];
     };
   });

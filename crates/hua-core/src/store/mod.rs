@@ -5,7 +5,7 @@ pub use backend::{Backend, LocalBackend};
 pub use id::*;
 pub use object::*;
 pub use package::*;
-pub use store::Store;
+pub use store::*;
 
 mod backend;
 mod id;

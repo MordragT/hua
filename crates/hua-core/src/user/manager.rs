@@ -1,9 +1,10 @@
-use crate::extra::path::ComponentPathBuf;
-use crate::extra::persist::Pot;
-use crate::generation::GenerationManager;
-use crate::store::{Backend, PackageId};
-use crate::Store;
-use crate::{Requirement, User};
+use crate::{
+    dependency::Requirement,
+    extra::{path::ComponentPathBuf, persist::Pot},
+    generation::GenerationManager,
+    store::{Backend, PackageId, Store},
+    user::User,
+};
 use rustbreak::PathDatabase;
 use serde::{Deserialize, Serialize};
 use snafu::ResultExt;
@@ -201,7 +202,7 @@ mod tests {
     use crate::extra::path::ComponentPathBuf;
     use crate::store::LocalBackend;
     use crate::user::UserError;
-    use crate::{support::*, Store};
+    use crate::{store::Store, support::*};
     use std::assert_matches::assert_matches;
     use std::fs;
     use temp_dir::TempDir;

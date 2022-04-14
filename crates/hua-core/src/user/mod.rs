@@ -15,7 +15,9 @@ pub enum UserError {
     #[snafu(display("IO Error: {source}"))]
     IoError { source: std::io::Error },
     #[snafu(display("Generation Error: {source}"))]
-    GenerationError { source: crate::GenerationError },
+    GenerationError {
+        source: crate::generation::GenerationError,
+    },
     #[snafu(whatever, display("{message}"))]
     Whatever { message: String },
     #[snafu(display("Rusbreak {message}: {source}"))]
