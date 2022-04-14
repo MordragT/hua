@@ -2,9 +2,9 @@ use super::*;
 use crate::{
     dependency::Requirement,
     recipe::Recipe,
-    store::{package::Package, LocalStore, STORE_PATH},
+    store::{backend::Backend, package::Package, Store},
 };
-use cached_path::CacheBuilder;
+use cached_path::Cache;
 use relative_path::RelativePathBuf;
 use semver::Version;
 use serde::Deserialize;
@@ -26,7 +26,11 @@ pub struct RecipeData {
     pub target_dir: RelativePathBuf,
 }
 
-pub fn build_recipe(data: RecipeData) -> RecipeResult<(Package, PathBuf)> {
+pub fn build_recipe<B: Backend>(
+    data: RecipeData,
+    store: &Store<B>,
+    cache: &Cache,
+) -> RecipeResult<(Package, PathBuf)> {
     let RecipeData {
         name,
         version,
@@ -54,9 +58,6 @@ pub fn build_recipe(data: RecipeData) -> RecipeResult<(Package, PathBuf)> {
         requires_build,
         target_dir,
     );
-
-    let cache = CacheBuilder::default().build().context(CacheSnafu)?;
-    let store = LocalStore::open(STORE_PATH).context(StoreSnafu)?;
 
     recipe
         .fetch(&cache)?

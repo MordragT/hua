@@ -4,7 +4,11 @@ use clap::{arg, Command};
 use console::style;
 use dialoguer::{Confirm, Select};
 use hua_core::{
+    cache::CacheBuilder,
     extra::path::ComponentPathBuf,
+    jail::{Bind, JailBuilder},
+    recipe::{self, RecipeData},
+    shell::ShellBuilder,
     store::{package::Package, LocalStore, STORE_PATH},
     user::UserManager,
 };
@@ -25,7 +29,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .about("Do operations on the store")
                 .arg_required_else_help(true)
                 .subcommands([
-                    Command::new("search").about("Searches the store for the given path").arg(arg!(<NAME> "The name to search for")),
+                    Command::new("search").about("Searches the store for the given name").arg(arg!(<NAME> "The name to search for")),
                     Command::new("collect-garbage").about("Collects all unused packages in the store and deletes them"),
                     Command::new("add").about("Add package to the store").args([arg!(<LOCK_FILE> "The lock file of the package"), arg!(<PATH> "The path of the package files")])
                     ]),
@@ -47,6 +51,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .about("Creates a new generation without the specified package and switches to the generation")
                 .arg_required_else_help(true)
                 .arg(arg!(<NAME> "The name of package")),
+            Command::new("build")
+                .about("Builds a recipe to a new package")
+                .arg_required_else_help(true)
+                .arg(arg!(<PATH> "The path to the recipe")),
             Command::new("shell")
                 .about("Create a new shell with the specified packages in scope")
                 .arg_required_else_help(true)
@@ -70,7 +78,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             let _store = LocalStore::init(STORE_PATH)?;
             let _user_manager = UserManager::init(USER_MANAGER_PATH)?;
-            println!("Files and folders created!");
+            println!("Files and folders created");
         }
         Some(("store", sub_matches)) => match sub_matches.subcommand() {
             Some(("search", sub_matches)) => {
@@ -81,7 +89,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 for (id, desc, _objects) in store.packages().filter_by_name_starting_with(name) {
                     println!("Index {id}: {desc}\n");
                 }
-                println!("Package not found");
+                println!("No package found");
             }
             Some(("collect-garbage", _)) => {
                 let mut store = LocalStore::open(STORE_PATH)?;
@@ -102,15 +110,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 let mut store = LocalStore::open(STORE_PATH)?;
 
-                println!("Package to add to the store: {}", &package.desc);
-                if Confirm::new()
-                    .with_prompt("Do you want to continue?")
-                    .interact()?
-                {
+                println!("Package to add: {}", &package.desc);
+                if Confirm::new().with_prompt("Continue?").interact()? {
                     store.insert(package, path)?;
                     store.flush()?;
                 } else {
-                    println!("Package was not added to the store.");
+                    println!("Nothing added");
                 }
             }
             _ => unreachable!(),
@@ -129,7 +134,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 user_manager.remove_generation(id)?;
                 user_manager.flush()?;
 
-                println!("Generation {id} was successfully removed.");
+                println!("{} {id} removed", style("Success").green());
             }
             _ => unreachable!(),
         },
@@ -167,9 +172,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 user_manager.insert_requirement(req, &store)?;
                 user_manager.flush()?;
-                println!("Package {} was successfully added.", name);
+                println!("{} {name} added", style("Success").green());
             } else {
-                println!("No package was added.");
+                println!("Nothing added");
             }
         }
         Some(("remove", sub_matches)) => {
@@ -201,12 +206,43 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 user_manager.remove_requirement(&req, &store)?;
                 user_manager.flush()?;
-                println!("Package {} was successfully removed.", name);
+                println!("{} {name} removed", style("Success").green());
             } else {
-                println!("No package was removed.");
+                println!("Nothing removed");
             }
         }
-        Some(("shell", _sub_matches)) => todo!(),
+        Some(("build", sub_matches)) => {
+            let path = sub_matches
+                .value_of("PATH")
+                .expect("A recipe has to be provided.");
+            let data = fs::read(path)?;
+            let recipe_data = toml::from_slice::<RecipeData>(&data)?;
+
+            let store = LocalStore::open(STORE_PATH)?;
+            let cache = CacheBuilder::default().build()?;
+
+            let (package, path) = recipe::build_recipe(recipe_data, &store, &cache)?;
+
+            println!("{} {path:#?}\n{package}", style("Success").green());
+        }
+        Some(("shell", sub_matches)) => {
+            let names = sub_matches
+                .values_of("NAME")
+                .expect("When creating a shell, package names must be provided.");
+            let cwd = std::env::current_dir()?;
+
+            let store = LocalStore::open(STORE_PATH)?;
+
+            let jail = JailBuilder::new()
+                .bind(Bind::read_write(&cwd, &cwd))
+                .current_dir(cwd);
+
+            let shell = ShellBuilder::new()?.with_names(names, &store)?;
+            let jail = shell.apply(jail)?;
+
+            let mut child = jail.arg("sh").run()?;
+            child.wait()?;
+        }
         _ => unreachable!(),
     }
 

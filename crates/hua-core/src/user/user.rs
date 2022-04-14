@@ -18,9 +18,7 @@ impl User {
     /// Create a new user directory under the given path.
     pub fn init<P: AsRef<Path>>(path: P, name: String) -> UserResult<Self> {
         let path = path.as_ref().join("generations");
-        if !path.exists() {
-            fs::create_dir(&path).context(IoSnafu)?;
-        }
+        fs::create_dir(&path).context(IoSnafu)?;
 
         let generation_manager = GenerationManager::init(&path).context(GenerationSnafu)?;
 

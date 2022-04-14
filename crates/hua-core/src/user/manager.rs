@@ -39,7 +39,10 @@ impl Users {
                 message: "OsString conversion error".to_owned(),
             })?;
 
-        let user = User::init(path.as_ref().join(&name), name)?;
+        let path = path.as_ref().join(&name);
+        fs::create_dir(&path).context(IoSnafu)?;
+
+        let user = User::init(path, name)?;
         list.insert(current, user);
 
         Ok(Self { current, list })

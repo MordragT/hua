@@ -2,8 +2,8 @@ use super::*;
 use crate::{
     dependency::Requirement,
     extra::hash::PackageHash,
-    generation::GenerationBuilder,
     jail::{Bind, JailBuilder},
+    shell::ShellBuilder,
     store::{
         backend::Backend,
         package::{Package, PackageDesc},
@@ -12,7 +12,6 @@ use crate::{
 };
 use cached_path::{Cache, Options};
 use fs_extra::dir::CopyOptions;
-use os_type::OSType;
 use relative_path::RelativePathBuf;
 use semver::Version;
 use std::{
@@ -25,8 +24,9 @@ use temp_dir::TempDir;
 
 // TODO: implement patches, allow multiple sources ?
 
-pub const BUILD_PATH: &str = "/tmp/build/";
-pub const BUILD_SCRIPT_PATH: &str = "/tmp/build.sh";
+const LOCAL_BUILD_PATH: &str = "result/";
+const BUILD_PATH: &str = "/tmp/build/";
+const BUILD_SCRIPT_PATH: &str = "/tmp/build.sh";
 
 /// A Recipe to build an Package from.
 #[derive(Debug)]
@@ -42,7 +42,7 @@ pub struct Recipe {
     requires_build: HashSet<Requirement>,
     target_dir: RelativePathBuf,
     jail: Option<JailBuilder>,
-    build_generation_dir: Option<TempDir>,
+    shell: Option<ShellBuilder>,
     build_dir: Option<PathBuf>,
 }
 
@@ -72,7 +72,7 @@ impl Recipe {
             requires_build,
             target_dir,
             jail: None,
-            build_generation_dir: None,
+            shell: None,
             build_dir: None,
         }
     }
@@ -89,7 +89,7 @@ impl Recipe {
             .cached_path_with_options(&self.source, &Options::default().extract())
             .context(CacheSnafu)?;
 
-        let build_dir = PathBuf::from("build");
+        let build_dir = PathBuf::from(LOCAL_BUILD_PATH);
         if build_dir.exists() {
             fs::remove_dir_all(&build_dir).context(IoSnafu)?;
         }
@@ -121,36 +121,19 @@ impl Recipe {
             .into_iter()
             .chain(self.requires_build.clone().into_iter());
 
-        let build_generation_dir = TempDir::new().context(IoSnafu)?;
-        let tmp_gen = GenerationBuilder::new(0)
-            .under(build_generation_dir.path())
-            .requires(requirements)
-            .resolve(store)
-            .context(GenerationSnafu)?
-            .build(store)
-            .context(GenerationSnafu)?;
-        let tmp_gen_paths = tmp_gen.component_paths();
-
-        // TODO bind hua store aswell so that symlinks can be found
-        // only bind nix store conditonally else bind lib
-
         let jail = JailBuilder::new()
-            .bind(Bind::read_only("/bin", "/bin"))
-            //.bind(Bind::read_only(STORE_PATH, STORE_PATH))
-            .bind(Bind::read_only(&tmp_gen_paths.binary, "/usr/bin/"))
-            .bind(Bind::read_only(&tmp_gen_paths.library, "/usr/lib/"))
-            .bind(Bind::read_only(&tmp_gen_paths.share, "/usr/share/"))
-            .bind(Bind::read_only(&tmp_gen_paths.config, "/etc/"))
             .bind(Bind::read_write(build_dir, BUILD_PATH))
             .envs(vars)
             .current_dir(BUILD_PATH);
 
-        let jail = match os_type::current_platform().os_type {
-            OSType::NixOS => jail.bind(Bind::read_only("/nix/store", "/nix/store")),
-            _ => todo!(),
-        };
+        let shell = ShellBuilder::new()
+            .context(ShellSnafu)?
+            .with_requirements(requirements, &store)
+            .context(ShellSnafu)?;
 
-        self.build_generation_dir = Some(build_generation_dir);
+        let jail = shell.apply(jail).context(ShellSnafu)?;
+
+        self.shell = Some(shell);
         self.jail = Some(jail);
         Ok(self)
     }

@@ -10,6 +10,7 @@ pub mod extra;
 pub mod generation;
 pub mod jail;
 pub mod recipe;
+pub mod shell;
 pub mod store;
 mod support;
 pub mod user;

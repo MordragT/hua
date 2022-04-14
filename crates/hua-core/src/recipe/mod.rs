@@ -1,4 +1,4 @@
-use crate::{generation::GenerationError, store::StoreError};
+use crate::{generation::GenerationError, shell::ShellError, store::StoreError};
 use snafu::prelude::*;
 
 pub use builder::*;
@@ -17,6 +17,8 @@ pub enum RecipeError {
     FsExtraError { source: fs_extra::error::Error },
     #[snafu(display("GenerationError: {source}"))]
     GenerationError { source: GenerationError },
+    #[snafu(display("ShellError: {source}"))]
+    ShellError { source: ShellError },
     #[snafu(display("StoreError: {source}"))]
     StoreError { source: StoreError },
     #[snafu(display("Fetch the source files first"))]
