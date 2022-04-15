@@ -2,3 +2,4 @@ target/
 crates/hua-platform/host.o
 .vscode/
 result
+*.lock
