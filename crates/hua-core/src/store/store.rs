@@ -9,7 +9,7 @@ use crate::{
 use std::{
     collections::HashSet,
     fs::{self},
-    os::unix,
+    os::unix::{self, prelude::PermissionsExt},
     path::{Path, PathBuf},
 };
 
@@ -409,7 +409,14 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
 
     /// Flushes all data to the backend
     pub fn flush(self) -> StoreResult<()> {
-        self.backend.flush()
+        self.backend.flush()?;
+
+        let path = self.source.join(PACKAGES_DB);
+        let mut perm = fs::metadata(&path).context(IoSnafu)?.permissions();
+        perm.set_mode(0o644);
+        fs::set_permissions(path, perm).context(IoSnafu)?;
+
+        Ok(())
     }
 }
 
