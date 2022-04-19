@@ -171,6 +171,8 @@ impl Recipe {
         let mut script_file = File::create(&script_path).context(IoSnafu)?;
         script_file.write(script.as_bytes()).context(IoSnafu)?;
 
+        debug!("Written temprorary script file {script_path:?}");
+
         temp_dir.leak();
 
         let mut process = jail

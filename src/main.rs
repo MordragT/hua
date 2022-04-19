@@ -89,9 +89,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .expect("When searching the store a package name has to be given.");
                 let store = LocalStore::open(STORE_PATH)?;
                 for (id, desc, _objects) in store.packages().filter_by_name_containing(name) {
-                    println!("Index {id}: {desc}\n");
+                    println!("{} {desc}\n", style(id.truncate()).blue());
                 }
-                println!("No package found");
             }
             Some(("collect-garbage", _)) => {
                 let mut store = LocalStore::open(STORE_PATH)?;
@@ -205,7 +204,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let mut user_manager = UserManager::open(USER_MANAGER_PATH)?;
 
             let (names, reqs): (Vec<_>, Vec<_>) = user_manager
-                .filter_requirements_by_name_starting_with(name)
+                .filter_requirements_by_name_containing(name)
                 .map(|req| {
                     (
                         format!("{} {}", style(req.name()).green(), req.version_req()),
@@ -215,7 +214,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .unzip();
 
             let selection = Select::new()
-                .with_prompt("Wich package to remove?")
+                .with_prompt("Wich package to remove (cancel with ESC or q)?")
                 .items(&names)
                 .interact_opt()?;
 

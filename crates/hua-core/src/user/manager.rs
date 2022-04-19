@@ -232,6 +232,13 @@ impl UserManager {
         self.filter_requirements(move |req| req.name().starts_with(name))
     }
 
+    pub fn filter_requirements_by_name_containing<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> impl Iterator<Item = &'a Requirement> {
+        self.filter_requirements(move |req| req.name().contains(name))
+    }
+
     /// Removes the specified generation.
     /// Returns true if the generation was present and false if it wasnt.
     pub fn remove_generation(&mut self, id: usize) -> UserResult<bool> {

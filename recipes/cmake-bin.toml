@@ -1,0 +1,12 @@
+name = "cmake-bin"
+version = "3.23.1"
+desc = "A cross-platform open-source make system"
+archs = 1
+platforms = 1
+source = "https://ftp5.gwdg.de/pub/linux/archlinux/extra/os/x86_64/cmake-3.23.1-1-x86_64.pkg.tar.zst"
+licenses = [ "custom" ]
+requires = []
+requires_build = []
+target_dir = "usr"
+vars = []
+script = "echo Binary Package -> Nothing todo"
