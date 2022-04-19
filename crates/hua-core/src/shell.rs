@@ -67,7 +67,7 @@ impl ShellBuilder {
             .map(|name| {
                 // TODO get the newest package not just any.
                 let name = name.as_ref();
-                if let Some((id, desc)) = store.packages().find_by_name(name) {
+                if let Some((id, desc)) = store.packages().find_by_name_starting_with(name) {
                     let blobs = unsafe { store.get_blobs_cloned_of_package(id).unwrap_unchecked() };
                     Ok((desc.clone(), blobs.collect()).into())
                 } else {

@@ -232,6 +232,13 @@ impl Packages {
         self.filter(move |_id, desc, _objects| desc.name.starts_with(name))
     }
 
+    pub fn filter_by_name_containing<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> impl Iterator<Item = (&PackageId, &PackageDesc, &HashSet<ObjectId>)> + '_ {
+        self.filter(move |_id, desc, _objects| desc.name.contains(name))
+    }
+
     pub fn find<P: Fn(&PackageId, &PackageDesc, &HashSet<ObjectId>) -> bool>(
         &self,
         predicate: P,
@@ -244,6 +251,10 @@ impl Packages {
 
     pub fn find_by_name_starting_with(&self, name: &str) -> Option<(&PackageId, &PackageDesc)> {
         self.find(|_id, p, _objects| p.name.starts_with(name))
+    }
+
+    pub fn find_by_name_containing(&self, name: &str) -> Option<(&PackageId, &PackageDesc)> {
+        self.find(|_id, p, _objects| p.name.contains(name))
     }
 
     pub fn find_by_name(&self, name: &str) -> Option<(&PackageId, &PackageDesc)> {

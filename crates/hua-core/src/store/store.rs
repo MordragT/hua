@@ -1,4 +1,4 @@
-use log::info;
+use log::{info, warn};
 use url::Url;
 
 use crate::{
@@ -92,8 +92,8 @@ impl<B: ReadBackend<Source = PathBuf>> Store<PathBuf, B> {
         // I checked beforehand if package is in scope
         let object_ids = unsafe { self.packages().get_children(package_id).unwrap_unchecked() };
 
-        self.objects()
-            .read_objects(object_ids, |_id, object| match object.kind() {
+        for (_id, object) in self.objects().get_multiple(object_ids) {
+            match object.kind() {
                 ObjectKind::Blob | ObjectKind::Link => {
                     let absolute = object.to_path(&root);
                     let relative = absolute.strip_prefix(&root).context(StripPrefixSnafu)?;
@@ -114,9 +114,8 @@ impl<B: ReadBackend<Source = PathBuf>> Store<PathBuf, B> {
                         to.share
                             .join(relative.strip_prefix("share/").context(StripPrefixSnafu)?)
                     } else {
-                        return Err(StoreError::UnsupportedFilePath {
-                            path: relative.to_owned(),
-                        });
+                        warn!("Unsupported file path {relative:?}");
+                        continue;
                     };
 
                     if let Some(parent) = dest.parent() && !parent.exists() {
@@ -124,12 +123,10 @@ impl<B: ReadBackend<Source = PathBuf>> Store<PathBuf, B> {
                     }
 
                     unix::fs::symlink(absolute, dest).context(IoSnafu)?;
-
-                    Ok(())
                 }
-                _ => Ok(()),
-            })
-            .collect::<StoreResult<()>>()?;
+                _ => (),
+            }
+        }
         Ok(())
     }
 

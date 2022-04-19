@@ -247,6 +247,16 @@ impl Objects {
         self.get_mut(id).unwrap_unchecked()
     }
 
+    pub fn get_multiple<'a>(
+        &self,
+        ids: impl IntoIterator<Item = &'a ObjectId>,
+    ) -> impl Iterator<Item = (&'a ObjectId, &Object)> {
+        ids.into_iter().map(move |id| {
+            let object = unsafe { self.get_unchecked(id) };
+            (id, object)
+        })
+    }
+
     pub fn remove_objects<'a>(
         &'a mut self,
         ids: impl IntoIterator<Item = &'a ObjectId> + 'a,

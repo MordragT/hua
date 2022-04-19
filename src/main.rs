@@ -88,7 +88,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .value_of("NAME")
                     .expect("When searching the store a package name has to be given.");
                 let store = LocalStore::open(STORE_PATH)?;
-                for (id, desc, _objects) in store.packages().filter_by_name_starting_with(name) {
+                for (id, desc, _objects) in store.packages().filter_by_name_containing(name) {
                     println!("Index {id}: {desc}\n");
                 }
                 println!("No package found");
@@ -164,7 +164,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             let (names, packages): (Vec<_>, Vec<_>) = store
                 .packages()
-                .filter_by_name_starting_with(name)
+                .filter_by_name_containing(name)
                 .map(|(id, desc, objects)| {
                     (
                         format!("{} {}", style(&desc.name).green(), desc.version),
@@ -174,7 +174,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .unzip();
 
             let selection = Select::new()
-                .with_prompt("Wich package to add?\nCancel with ESC or q.")
+                .with_prompt("Wich package to add (cancel with ESC or q)?")
                 .items(&names)
                 .interact_opt()?;
 
@@ -185,7 +185,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let req = (desc.clone(), blobs.collect()).into();
 
                 user_manager.insert_requirement(req, &store)?;
+
+                let global_paths = ComponentPathBuf::from_path(GLOBAL_PATH);
+                user_manager.switch_global_links(&global_paths)?;
+
                 user_manager.flush()?;
+
                 println!("{} {name} added", style("Success").green());
             } else {
                 println!("Nothing added");
@@ -219,6 +224,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let req = reqs[selection].clone();
 
                 user_manager.remove_requirement(&req, &store)?;
+
+                let global_paths = ComponentPathBuf::from_path(GLOBAL_PATH);
+                user_manager.switch_global_links(&global_paths)?;
+
                 user_manager.flush()?;
                 println!("{} {name} removed", style("Success").green());
             } else {
