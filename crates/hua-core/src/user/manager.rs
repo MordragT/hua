@@ -11,6 +11,7 @@ use snafu::ResultExt;
 use std::{
     collections::HashMap,
     fs,
+    os::unix::prelude::PermissionsExt,
     path::{Path, PathBuf},
 };
 
@@ -19,7 +20,8 @@ use super::*;
 /// The filename of the users database
 pub const USERS_DB: &str = "users.db";
 
-// TODO: use put_data and get_data and flush instead of db.read and db.write
+// TODO: instead of allowing the db to be written by everybody
+// ditch the db all together and implement a file based solution
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct Users {
@@ -62,11 +64,20 @@ impl UserManager {
     pub fn init<P: AsRef<Path>>(path: P) -> UserResult<Self> {
         let path = path.as_ref();
         fs::create_dir(&path).context(IoSnafu)?;
+        let mut perm = fs::metadata(path).context(IoSnafu)?.permissions();
+        perm.set_mode(0o777);
+        fs::set_permissions(path, perm).context(IoSnafu)?;
 
-        let database = PathDatabase::create_at_path(path.join(USERS_DB), Users::init(&path)?)
-            .context(RustbreakSnafu {
+        let db_path = path.join(USERS_DB);
+        let database = PathDatabase::create_at_path(db_path.clone(), Users::init(&path)?).context(
+            RustbreakSnafu {
                 message: format!("at {USERS_DB}"),
-            })?;
+            },
+        )?;
+
+        let mut perm = fs::metadata(&db_path).context(IoSnafu)?.permissions();
+        perm.set_mode(0o666);
+        fs::set_permissions(db_path, perm).context(IoSnafu)?;
 
         let users = database.get_data(false).context(RustbreakSnafu {
             message: "could not load user data".to_owned(),
