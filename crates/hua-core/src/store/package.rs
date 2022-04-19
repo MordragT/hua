@@ -59,7 +59,7 @@ impl fmt::Display for PackageDesc {
         for req in &self.requires {
             write!(f, "{req}\n")?;
         }
-        write!(f, "")
+        Ok(())
     }
 }
 
@@ -106,7 +106,7 @@ impl Package {
 
 impl fmt::Display for Package {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}", style(self.id).red(), self.desc)
+        write!(f, "{:x} {}", style(self.id.truncate()).blue(), self.desc)
     }
 }
 

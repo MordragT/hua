@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::{array::TryFromSliceError, fmt, ops::Deref, str::FromStr};
 
+use crate::extra;
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct RawId([u8; 32]);
 
@@ -114,11 +116,12 @@ impl Deref for PackageId {
 }
 
 impl FromStr for PackageId {
-    type Err = TryFromSliceError;
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let hash = <[u8; 32]>::try_from(s.as_bytes())?;
-        Ok(PackageId(RawId(hash)))
+        let vec = extra::str::parse_hex(s);
+        vec.try_into()
+            .map_err(|_| "Could not convert vec to id.".to_owned())
     }
 }
 
@@ -199,10 +202,24 @@ impl Deref for ObjectId {
 }
 
 impl FromStr for ObjectId {
-    type Err = TryFromSliceError;
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let hash = <[u8; 32]>::try_from(s.as_bytes())?;
-        Ok(ObjectId(RawId(hash)))
+        let vec = extra::str::parse_hex(s);
+        vec.try_into()
+            .map_err(|_| "Could not convert vec to id.".to_owned())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::PackageId;
+
+    #[test]
+    fn from_str() {
+        let id = "cff5b89509a60d44ae34be0e50356287de1e03622bc658e6422b2510cc15ef83";
+        let _id = PackageId::from_str(id).unwrap();
     }
 }
