@@ -123,8 +123,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 println!("Package to add:\n{}", &package.desc);
                 if Confirm::new().with_prompt("Continue?").interact()? {
+                    let name = package.name().clone();
+
                     store.insert(package, path)?;
                     store.flush()?;
+                    println!("{} {name} added", style("Success").green());
                 } else {
                     println!("Nothing added");
                 }
@@ -171,7 +174,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .unzip();
 
             let selection = Select::new()
-                .with_prompt("Wich package to add?")
+                .with_prompt("Wich package to add?\nCancel with ESC or q.")
                 .items(&names)
                 .interact_opt()?;
 

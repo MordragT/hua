@@ -36,6 +36,10 @@ impl User {
     pub fn generation_manager_mut(&mut self) -> &mut GenerationManager {
         &mut self.generation_manager
     }
+
+    pub fn name(&self) -> &String {
+        &self.name
+    }
 }
 
 #[cfg(test)]

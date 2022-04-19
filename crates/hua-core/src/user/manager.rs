@@ -5,11 +5,10 @@ use crate::{
     store::{backend::ReadBackend, id::PackageId, Store},
     user::User,
 };
-use rustbreak::PathDatabase;
+use rustbreak::{Database, PathDatabase};
 use serde::{Deserialize, Serialize};
 use snafu::ResultExt;
 use std::{
-    collections::HashMap,
     fs,
     os::unix::prelude::PermissionsExt,
     path::{Path, PathBuf},
@@ -23,16 +22,19 @@ pub const USERS_DB: &str = "users.db";
 // TODO: instead of allowing the db to be written by everybody
 // ditch the db all together and implement a file based solution
 
+// TODO change Users to simple Vec as the current user
+// must not be saved inside the database (it can change all the time anyway)
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct Users {
     pub current: usize,
-    pub list: HashMap<usize, User>,
+    pub list: Vec<User>,
 }
 
 impl Users {
     pub fn init<P: AsRef<Path>>(path: P) -> UserResult<Self> {
         let current = 0;
-        let mut list = HashMap::new();
+        let mut list = Vec::new();
 
         let name = users::get_current_username()
             .ok_or(UserError::UsernameNotFound)?
@@ -45,9 +47,46 @@ impl Users {
         fs::create_dir(&path).context(IoSnafu)?;
 
         let user = User::init(path, name)?;
-        list.insert(current, user);
+        list.push(user);
 
         Ok(Self { current, list })
+    }
+
+    pub fn insert<P: AsRef<Path>>(&mut self, name: String, path: P) -> UserResult<()> {
+        let path = path.as_ref().join(&name);
+        fs::create_dir(&path).context(IoSnafu)?;
+
+        let user = User::init(path, name)?;
+
+        let current = self.list.len();
+        self.list.push(user);
+        self.current = current;
+
+        Ok(())
+    }
+
+    pub fn find(&self, name: &String) -> Option<usize> {
+        self.list
+            .iter()
+            .enumerate()
+            .find_map(|(n, user)| if user.name() == name { Some(n) } else { None })
+    }
+
+    pub fn change_current_if_found(&mut self, name: &String) -> bool {
+        if let Some(index) = self.find(name) {
+            self.current = index;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn current_user(&self) -> &User {
+        &self.list[self.current]
+    }
+
+    pub fn current_user_mut(&mut self) -> &mut User {
+        &mut self.list[self.current]
     }
 }
 
@@ -99,14 +138,35 @@ impl UserManager {
             });
         }
 
-        let database =
-            PathDatabase::load_from_path(path.join(USERS_DB)).context(RustbreakSnafu {
+        let database: Database<Users, _, _> = PathDatabase::load_from_path(path.join(USERS_DB))
+            .context(RustbreakSnafu {
                 message: format!("at {USERS_DB}"),
             })?;
 
-        let users = database.get_data(false).context(RustbreakSnafu {
-            message: "could not load user data".to_owned(),
-        })?;
+        let users = {
+            let mut users = database.get_data(false).context(RustbreakSnafu {
+                message: "could not load user data".to_owned(),
+            })?;
+            let current_name = users::get_current_username()
+                .ok_or(UserError::UsernameNotFound)?
+                .into_string()
+                .map_err(|_| UserError::Whatever {
+                    message: "OsString conversion error".to_owned(),
+                })?;
+            if users.current_user().name() != &current_name
+                && !users.change_current_if_found(&current_name)
+            {
+                users.insert(current_name, path)?;
+                database.put_data(users, true).context(RustbreakSnafu {
+                    message: "Put user data error".to_owned(),
+                })?;
+                database.get_data(true).context(RustbreakSnafu {
+                    message: "Get user data error".to_owned(),
+                })?
+            } else {
+                users
+            }
+        };
 
         Ok(Self {
             path: path.to_owned(),
@@ -116,17 +176,11 @@ impl UserManager {
     }
 
     fn current_generation_manager(&self) -> &GenerationManager {
-        unsafe { &self.users.list.get(&self.users.current).unwrap_unchecked() }.generation_manager()
+        self.users.current_user().generation_manager()
     }
 
     fn current_generation_manager_mut(&mut self) -> &mut GenerationManager {
-        unsafe {
-            self.users
-                .list
-                .get_mut(&self.users.current)
-                .unwrap_unchecked()
-        }
-        .generation_manager_mut()
+        self.users.current_user_mut().generation_manager_mut()
     }
 
     /// Inserts a requiremnt into the current user.
@@ -209,7 +263,7 @@ impl UserManager {
         self.users
             .list
             .iter()
-            .map(|(_, user)| user.generation_manager().packages())
+            .map(|user| user.generation_manager().packages())
             .flatten()
     }
 
