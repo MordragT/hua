@@ -6,16 +6,22 @@ use self::{
 use snafu::prelude::*;
 use std::path::PathBuf;
 
+pub use locator::Locator;
 pub use store::*;
 
 pub mod backend;
 pub mod id;
+mod locator;
 pub mod object;
 pub mod package;
 mod store;
 
 #[derive(Debug, Snafu)]
 pub enum StoreError {
+    #[snafu(display("UrlParseError: {source}"))]
+    UrlParseError { source: url::ParseError },
+    #[snafu(display("CacheError: {source}"))]
+    CacheError { source: cached_path::Error },
     #[snafu(display("Could not create rustbreak database: {source}"))]
     RustbreakCreateError { source: rustbreak::RustbreakError },
     #[snafu(display("Could not load rustbreak database: {source}"))]

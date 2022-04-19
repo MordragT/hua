@@ -591,6 +591,7 @@ dependencies = [
  "snafu",
  "temp-dir",
  "toml",
+ "url",
  "users",
  "walkdir",
 ]

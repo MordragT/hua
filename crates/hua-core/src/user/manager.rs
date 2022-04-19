@@ -2,7 +2,7 @@ use crate::{
     dependency::Requirement,
     extra::{path::ComponentPathBuf, persist::Pot},
     generation::GenerationManager,
-    store::{backend::Backend, id::PackageId, Store},
+    store::{backend::ReadBackend, id::PackageId, Store},
     user::User,
 };
 use rustbreak::PathDatabase;
@@ -122,10 +122,10 @@ impl UserManager {
     /// If the requirement was not fullfilled, a try to get a matching package from the store is started.
     /// If the package could be retrieved a new generation is created and true is returned.
     /// If it fullfilled false is returned
-    pub fn insert_requirement<B: Backend>(
+    pub fn insert_requirement<B: ReadBackend<Source = PathBuf>>(
         &mut self,
         requirement: Requirement,
-        store: &Store<B>,
+        store: &Store<PathBuf, B>,
     ) -> UserResult<bool> {
         Ok(self
             .current_generation_manager_mut()
@@ -136,10 +136,10 @@ impl UserManager {
     /// Remove a package from the current user.
     /// If the package was present return true and create a new generation without the package.
     /// If it was not present false is returned.
-    pub fn remove_requirement<B: Backend>(
+    pub fn remove_requirement<B: ReadBackend<Source = PathBuf>>(
         &mut self,
         requirement: &Requirement,
-        store: &Store<B>,
+        store: &Store<PathBuf, B>,
     ) -> UserResult<bool> {
         Ok(self
             .current_generation_manager_mut()

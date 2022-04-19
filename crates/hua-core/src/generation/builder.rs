@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     dependency::{DependencyGraph, Requirement},
     extra::path::ComponentPathBuf,
-    store::{backend::Backend, id::PackageId, Store},
+    store::{backend::ReadBackend, id::PackageId, Store},
 };
 use std::collections::HashSet;
 use std::fs;
@@ -38,7 +38,7 @@ impl GenerationBuilder {
         self
     }
 
-    pub fn resolve<B: Backend>(mut self, store: &Store<B>) -> GenerationResult<Self> {
+    pub fn resolve<S, B: ReadBackend>(mut self, store: &Store<S, B>) -> GenerationResult<Self> {
         if let Some(reqs) = &self.requirements {
             let mut graph = DependencyGraph::new();
             let packages = graph
@@ -53,7 +53,10 @@ impl GenerationBuilder {
         }
     }
 
-    pub fn build<B: Backend>(self, store: &Store<B>) -> GenerationResult<Generation> {
+    pub fn build<B: ReadBackend<Source = PathBuf>>(
+        self,
+        store: &Store<PathBuf, B>,
+    ) -> GenerationResult<Generation> {
         let base = self
             .base
             .ok_or(GenerationError::MissingBasePath { id: self.id })?;

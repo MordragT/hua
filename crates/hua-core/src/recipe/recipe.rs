@@ -5,7 +5,7 @@ use crate::{
     jail::{Bind, JailBuilder},
     shell::ShellBuilder,
     store::{
-        backend::Backend,
+        backend::ReadBackend,
         package::{Package, PackageDesc},
         Store,
     },
@@ -105,9 +105,9 @@ impl Recipe {
 
     /// Link all dependencies temporarily and processes binaries
     /// for execution in the build phase.
-    pub fn prepare_requirements<B: Backend, L: AsRef<str>, R: AsRef<str>>(
+    pub fn prepare_requirements<B: ReadBackend<Source = PathBuf>, L: AsRef<str>, R: AsRef<str>>(
         mut self,
-        store: &Store<B>,
+        store: &Store<PathBuf, B>,
         vars: impl IntoIterator<Item = (L, R)>,
     ) -> RecipeResult<Self> {
         let build_dir = self

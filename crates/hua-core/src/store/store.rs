@@ -1,3 +1,5 @@
+use url::Url;
+
 use crate::{
     dependency::Requirement,
     extra::{path::ComponentPathBuf, style::ProgressBar},
@@ -11,7 +13,7 @@ use std::{
 };
 
 use super::{
-    backend::{Backend, LocalBackend},
+    backend::{LocalBackend, ReadBackend, RemoteBackend, WriteBackend},
     object::{Blob, Objects},
     package::{PackageDesc, Packages},
     *,
@@ -21,28 +23,42 @@ use super::{
 const PACKAGES_DB: &str = "packages.db";
 pub const STORE_PATH: &str = "/hua/store/";
 
-pub type LocalStore = Store<LocalBackend>;
+pub type LocalStore = Store<PathBuf, LocalBackend>;
+pub type RemoteStore = Store<Url, RemoteBackend>;
 
 /// A Store that contains all the packages installed by any user
 /// Content Addressable Store
 #[derive(Debug)]
-pub struct Store<B: Backend, const BAR: bool = true> {
-    path: PathBuf,
+pub struct Store<S, B, const BAR: bool = true> {
+    source: S,
     backend: B,
 }
 
-impl<B: Backend<Source = PathBuf>> Store<B> {
-    /// Creates a new store directory under the given path.
-    /// Will return an Error if the directory already exists
-    pub fn init<P: AsRef<Path>>(path: P) -> StoreResult<Self> {
-        let path = path.as_ref().to_owned();
-        fs::create_dir(&path).context(IoSnafu)?;
-
-        let backend = B::init(path.join(PACKAGES_DB))?;
-
-        Ok(Self { path, backend })
+impl<B> Store<Url, B> {
+    pub fn url(&self) -> &Url {
+        &self.source
     }
+}
 
+impl<B: ReadBackend<Source = Url>> Store<Url, B> {
+    pub fn open(url: Url) -> StoreResult<Self> {
+        let packages_db_url = url.join(PACKAGES_DB).context(UrlParseSnafu)?;
+        let backend = B::open(packages_db_url)?;
+
+        Ok(Self {
+            source: url,
+            backend,
+        })
+    }
+}
+
+impl<B> Store<PathBuf, B> {
+    pub fn path(&self) -> &Path {
+        &self.source
+    }
+}
+
+impl<B: ReadBackend<Source = PathBuf>> Store<PathBuf, B> {
     /// Opens a store under the specified path.
     /// Returns an error if the path does not exists or
     /// does not contain the necessary files
@@ -55,35 +71,103 @@ impl<B: Backend<Source = PathBuf>> Store<B> {
 
         let backend = B::open(path.join(PACKAGES_DB))?;
 
-        Ok(Self { path, backend })
+        Ok(Self {
+            source: path,
+            backend,
+        })
+    }
+
+    /// Links only the package at the specified path.
+    /// If the package itself has object linked to other packages,
+    /// link to the link.
+    pub fn link_package(&self, package_id: &PackageId, to: &ComponentPathBuf) -> StoreResult<()> {
+        let root = self
+            .packages()
+            .path_in_store(package_id, &self.source)
+            .ok_or(StoreError::PackageNotFoundById { id: *package_id })?;
+
+        to.create_dirs().context(IoSnafu)?;
+
+        // I checked beforehand if package is in scope
+        let object_ids = unsafe { self.packages().get_children(package_id).unwrap_unchecked() };
+
+        self.objects()
+            .read_objects(object_ids, |_id, object| match object.kind() {
+                ObjectKind::Blob | ObjectKind::Link => {
+                    let absolute = object.to_path(&root);
+                    let relative = absolute.strip_prefix(&root).context(StripPrefixSnafu)?;
+
+                    let dest = if relative.starts_with("bin/") {
+                        to.binary
+                            .join(relative.strip_prefix("bin/").context(StripPrefixSnafu)?)
+                    } else if relative.starts_with("lib/") {
+                        to.library
+                            .join(relative.strip_prefix("lib/").context(StripPrefixSnafu)?)
+                    } else if relative.starts_with("cfg/") {
+                        to.config
+                            .join(relative.strip_prefix("cfg/").context(StripPrefixSnafu)?)
+                    } else if relative.starts_with("etc/") {
+                        to.config
+                            .join(relative.strip_prefix("etc/").context(StripPrefixSnafu)?)
+                    } else if relative.starts_with("share/") {
+                        to.share
+                            .join(relative.strip_prefix("share/").context(StripPrefixSnafu)?)
+                    } else {
+                        return Err(StoreError::UnsupportedFilePath {
+                            path: relative.to_owned(),
+                        });
+                    };
+
+                    if let Some(parent) = dest.parent() && !parent.exists() {
+                        fs::create_dir_all(parent).context(IoSnafu)?;
+                    }
+
+                    unix::fs::symlink(absolute, dest).context(IoSnafu)?;
+
+                    Ok(())
+                }
+                _ => Ok(()),
+            })
+            .collect::<StoreResult<()>>()?;
+        Ok(())
+    }
+
+    /// Links all the packages to the specified path.
+    pub fn link_packages<'a>(
+        &self,
+        indices: impl IntoIterator<Item = &'a PackageId>,
+        to: &ComponentPathBuf,
+    ) -> StoreResult<()> {
+        for index in indices {
+            self.link_package(index, to)?;
+        }
+        Ok(())
     }
 }
 
-impl<B: Backend, const BAR: bool> Store<B, BAR> {
+impl<B: WriteBackend<Source = PathBuf>> Store<PathBuf, B> {
+    /// Creates a new store directory under the given path.
+    /// Will return an Error if the directory already exists
+    pub fn init<P: AsRef<Path>>(path: P) -> StoreResult<Self> {
+        let path = path.as_ref().to_owned();
+        fs::create_dir(&path).context(IoSnafu)?;
+
+        let backend = B::init(path.join(PACKAGES_DB))?;
+
+        Ok(Self {
+            source: path,
+            backend,
+        })
+    }
+}
+
+impl<S, B: ReadBackend, const BAR: bool> Store<S, B, BAR> {
     pub fn packages(&self) -> &Packages {
         self.backend.packages()
     }
 
-    pub fn packages_mut(&mut self) -> &mut Packages {
-        self.backend.packages_mut()
-    }
-
     pub fn objects(&self) -> &Objects {
         self.backend.objects()
-    }
-
-    pub fn objects_mut(&mut self) -> &mut Objects {
-        self.backend.objects_mut()
-    }
-
-    fn get_full_object_path(&self, object_id: &ObjectId) -> Option<PathBuf> {
-        if let Some(obj) = self.objects().get(&object_id) && let Some(package_id) = self.packages().find_package_id(object_id) {
-            let package_path = self.packages().path_in_store(&package_id, &self.path);
-
-            package_path.map(|path| obj.to_path(path))
-        } else {
-            None
-        }
     }
 
     pub fn matches<'a>(
@@ -144,6 +228,30 @@ impl<B: Backend, const BAR: bool> Store<B, BAR> {
             None
         }
     }
+}
+
+impl<S, B: WriteBackend, const BAR: bool> Store<S, B, BAR> {
+    pub fn objects_mut(&mut self) -> &mut Objects {
+        self.backend.objects_mut()
+    }
+
+    pub fn packages_mut(&mut self) -> &mut Packages {
+        self.backend.packages_mut()
+    }
+}
+
+impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BAR: bool>
+    Store<PathBuf, B, BAR>
+{
+    fn get_full_object_path(&self, object_id: &ObjectId) -> Option<PathBuf> {
+        if let Some(obj) = self.objects().get(&object_id) && let Some(package_id) = self.packages().find_package_id(object_id) {
+            let package_path = self.packages().path_in_store(&package_id, &self.source);
+
+            package_path.map(|path| obj.to_path(path))
+        } else {
+            None
+        }
+    }
 
     /// Inserts a package into the store and returns true if the package was not present and was inserted
     /// and false if it was already present.
@@ -154,7 +262,7 @@ impl<B: Backend, const BAR: bool> Store<B, BAR> {
             return Err(StoreError::PackageNotVerified { package });
         }
 
-        let path_in_store = package.path_in_store(self.path());
+        let path_in_store = package.path_in_store(&self.source);
         fs::create_dir(&path_in_store).context(IoSnafu)?;
 
         let Package {
@@ -250,73 +358,6 @@ impl<B: Backend, const BAR: bool> Store<B, BAR> {
             .map(|(package, path)| self.insert(package, path))
     }
 
-    /// Links only the package at the specified path.
-    /// If the package itself has object linked to other packages,
-    /// link to the link.
-    pub fn link_package(&self, package_id: &PackageId, to: &ComponentPathBuf) -> StoreResult<()> {
-        let root = self
-            .packages()
-            .path_in_store(package_id, &self.path)
-            .ok_or(StoreError::PackageNotFoundById { id: *package_id })?;
-
-        to.create_dirs().context(IoSnafu)?;
-
-        // I checked beforehand if package is in scope
-        let object_ids = unsafe { self.packages().get_children(package_id).unwrap_unchecked() };
-
-        self.objects()
-            .read_objects(object_ids, |_id, object| match object.kind() {
-                ObjectKind::Blob | ObjectKind::Link => {
-                    let absolute = object.to_path(&root);
-                    let relative = absolute.strip_prefix(&root).context(StripPrefixSnafu)?;
-
-                    let dest = if relative.starts_with("bin/") {
-                        to.binary
-                            .join(relative.strip_prefix("bin/").context(StripPrefixSnafu)?)
-                    } else if relative.starts_with("lib/") {
-                        to.library
-                            .join(relative.strip_prefix("lib/").context(StripPrefixSnafu)?)
-                    } else if relative.starts_with("cfg/") {
-                        to.config
-                            .join(relative.strip_prefix("cfg/").context(StripPrefixSnafu)?)
-                    } else if relative.starts_with("etc/") {
-                        to.config
-                            .join(relative.strip_prefix("etc/").context(StripPrefixSnafu)?)
-                    } else if relative.starts_with("share/") {
-                        to.share
-                            .join(relative.strip_prefix("share/").context(StripPrefixSnafu)?)
-                    } else {
-                        return Err(StoreError::UnsupportedFilePath {
-                            path: relative.to_owned(),
-                        });
-                    };
-
-                    if let Some(parent) = dest.parent() && !parent.exists() {
-                        fs::create_dir_all(parent).context(IoSnafu)?;
-                    }
-
-                    unix::fs::symlink(absolute, dest).context(IoSnafu)?;
-
-                    Ok(())
-                }
-                _ => Ok(()),
-            })
-            .collect::<StoreResult<()>>()?;
-        Ok(())
-    }
-
-    /// Links all the packages to the specified path.
-    pub fn link_packages<'a>(
-        &self,
-        indices: impl IntoIterator<Item = &'a PackageId>,
-        to: &ComponentPathBuf,
-    ) -> StoreResult<()> {
-        for index in indices {
-            self.link_package(index, to)?;
-        }
-        Ok(())
-    }
-
     /// Remove all packages that are currently unused in all generations.
     pub fn remove_unused(&mut self, user_manager: &UserManager) -> StoreResult<Vec<PackageId>> {
         let used_packages = user_manager.packages().collect::<HashSet<&PackageId>>();
@@ -333,7 +374,7 @@ impl<B: Backend, const BAR: bool> Store<B, BAR> {
             for package_id in &to_remove {
                 let root = unsafe {
                     self.packages()
-                        .path_in_store(&package_id, &self.path)
+                        .path_in_store(&package_id, &self.source)
                         .unwrap_unchecked()
                 };
 
@@ -346,7 +387,7 @@ impl<B: Backend, const BAR: bool> Store<B, BAR> {
             for package_id in &to_remove {
                 let root = unsafe {
                     self.packages()
-                        .path_in_store(&package_id, &self.path)
+                        .path_in_store(&package_id, &self.source)
                         .unwrap_unchecked()
                 };
 
@@ -357,16 +398,9 @@ impl<B: Backend, const BAR: bool> Store<B, BAR> {
         Ok(to_remove)
     }
 
-    // TODO maybe flush just after every io operation
-
     /// Flushes all data to the backend
     pub fn flush(self) -> StoreResult<()> {
         self.backend.flush()
-    }
-
-    /// The path of the store
-    pub fn path(&self) -> &Path {
-        &self.path
     }
 }
 

@@ -3,7 +3,7 @@ use crate::{
     dependency::Requirement,
     extra::{self, path::ComponentPathBuf},
     generation::{Generation, GenerationBuilder},
-    store::{backend::Backend, id::PackageId, Store},
+    store::{backend::ReadBackend, id::PackageId, Store},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -82,10 +82,10 @@ impl GenerationManager {
         }
     }
 
-    pub fn insert_requirement<B: Backend>(
+    pub fn insert_requirement<B: ReadBackend<Source = PathBuf>>(
         &mut self,
         requirement: Requirement,
-        store: &Store<B>,
+        store: &Store<PathBuf, B>,
     ) -> GenerationResult<bool> {
         if self.get_current().contains_requirement(&requirement) {
             Ok(false)
@@ -109,10 +109,10 @@ impl GenerationManager {
         }
     }
 
-    pub fn remove_requirement<B: Backend>(
+    pub fn remove_requirement<B: ReadBackend<Source = PathBuf>>(
         &mut self,
         requirement: &Requirement,
-        store: &Store<B>,
+        store: &Store<PathBuf, B>,
     ) -> GenerationResult<bool> {
         if self.get_current().contains_requirement(requirement) {
             self.counter += 1;

@@ -1,4 +1,6 @@
-use crate::store::{backend::Backend, id::PackageId, object::Blob, package::PackageDesc, Store};
+use crate::store::{
+    backend::ReadBackend, id::PackageId, object::Blob, package::PackageDesc, Store,
+};
 use daggy::{Dag, NodeIndex};
 use std::collections::{HashMap, HashSet};
 
@@ -28,10 +30,10 @@ impl<'a> DependencyGraph<'a> {
         }
     }
 
-    fn resolve_req<B: Backend>(
+    fn resolve_req<S, B: ReadBackend>(
         &mut self,
         req: &'a Requirement,
-        store: &'a Store<B>,
+        store: &'a Store<S, B>,
         choices: &mut HashMap<&'a Requirement, NodeIndex<usize>>,
     ) -> DependencyResult<NodeIndex<usize>> {
         let options = store
@@ -73,10 +75,10 @@ impl<'a> DependencyGraph<'a> {
         Ok(node)
     }
 
-    fn resolve_reqs<B: Backend>(
+    fn resolve_reqs<S, B: ReadBackend>(
         &mut self,
         requirements: impl IntoIterator<Item = &'a Requirement>,
-        store: &'a Store<B>,
+        store: &'a Store<S, B>,
         choices: &mut HashMap<&'a Requirement, NodeIndex<usize>>,
     ) -> DependencyResult<HashMap<&'a Requirement, NodeIndex<usize>>> {
         let mut nodes = HashMap::new();
@@ -115,10 +117,10 @@ impl<'a> DependencyGraph<'a> {
         Ok(nodes)
     }
 
-    fn resolve_choices<B: Backend>(
+    fn resolve_choices<S, B: ReadBackend>(
         &mut self,
         choices: HashMap<&'a Requirement, NodeIndex<usize>>,
-        store: &'a Store<B>,
+        store: &'a Store<S, B>,
     ) -> DependencyResult<()> {
         let mut future_choices = HashMap::new();
         for (req, node) in choices {
@@ -178,10 +180,10 @@ impl<'a> DependencyGraph<'a> {
         self.relations.graph().node_weights().all(Step::is_resolved)
     }
 
-    pub fn resolve<B: Backend>(
+    pub fn resolve<S, B: ReadBackend>(
         &mut self,
         requirements: impl IntoIterator<Item = &'a Requirement>,
-        store: &'a Store<B>,
+        store: &'a Store<S, B>,
     ) -> DependencyResult<impl Iterator<Item = PackageId> + '_> {
         let mut choices = HashMap::new();
 

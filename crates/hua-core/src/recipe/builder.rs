@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     dependency::Requirement,
     recipe::Recipe,
-    store::{backend::Backend, package::Package, Store},
+    store::{backend::ReadBackend, package::Package, Store},
 };
 use cached_path::Cache;
 use relative_path::RelativePathBuf;
@@ -26,9 +26,9 @@ pub struct RecipeData {
     pub target_dir: RelativePathBuf,
 }
 
-pub fn build_recipe<B: Backend>(
+pub fn build_recipe<B: ReadBackend<Source = PathBuf>>(
     data: RecipeData,
-    store: &Store<B>,
+    store: &Store<PathBuf, B>,
     cache: &Cache,
 ) -> RecipeResult<(Package, PathBuf)> {
     let RecipeData {

@@ -1,8 +1,10 @@
+use std::path::PathBuf;
+
 use crate::{
     dependency::Requirement,
     generation::{Generation, GenerationBuilder},
     jail::{Bind, JailBuilder},
-    store::{backend::Backend, Store},
+    store::{backend::ReadBackend, Store},
 };
 use os_type::OSType;
 use snafu::prelude::*;
@@ -38,10 +40,10 @@ impl ShellBuilder {
         })
     }
 
-    pub fn with_requirements<B: Backend>(
+    pub fn with_requirements<B: ReadBackend<Source = PathBuf>>(
         mut self,
         requirements: impl IntoIterator<Item = Requirement>,
-        store: &Store<B>,
+        store: &Store<PathBuf, B>,
     ) -> ShellResult<Self> {
         let generation = GenerationBuilder::new(0)
             .under(self.temp_dir.path())
@@ -55,10 +57,10 @@ impl ShellBuilder {
         Ok(self)
     }
 
-    pub fn with_names<N: AsRef<str>, B: Backend>(
+    pub fn with_names<N: AsRef<str>, B: ReadBackend<Source = PathBuf>>(
         self,
         names: impl IntoIterator<Item = N>,
-        store: &Store<B>,
+        store: &Store<PathBuf, B>,
     ) -> ShellResult<Self> {
         let requirements = names
             .into_iter()
