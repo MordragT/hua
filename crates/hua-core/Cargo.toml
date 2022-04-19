@@ -31,3 +31,4 @@ os_type = { git = "https://github.com/MordragT/os_type", rev = "0c4146ce4400ef66
 command-fds = "0.2"
 console = "0.15"
 indicatif = "0.16"
+log = "0.4"

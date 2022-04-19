@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{generation::GenerationError, shell::ShellError, store::StoreError};
 use snafu::prelude::*;
 
@@ -11,6 +13,11 @@ mod recipe;
 pub enum RecipeError {
     #[snafu(display("CacheError: {source}"))]
     CacheError { source: cached_path::Error },
+    #[snafu(display("Could not create {dir:?}: {source}"))]
+    CreateDirError {
+        dir: PathBuf,
+        source: std::io::Error,
+    },
     #[snafu(display("IoError: {source}"))]
     IoError { source: std::io::Error },
     #[snafu(display("FsExtraError: {source}"))]
@@ -25,12 +32,18 @@ pub enum RecipeError {
     MissingSourceFiles,
     #[snafu(display("Prepare requirements first"))]
     MissingJail,
+    #[snafu(display("Missing temp dir, fetch first"))]
+    MissingTempDir,
     #[snafu(display("The recipe is not compatible with your architecture"))]
     IncompatibleArchitecture,
     #[snafu(display("The recipe is not compatible with your platform"))]
     IncompatiblePlatform,
     #[snafu(display("TomlSerilizationError: {source}"))]
     TomlSerilizationError { source: toml::ser::Error },
+    #[snafu(display("Lock file exists: {path:?}"))]
+    LockFileExists { path: PathBuf },
+    #[snafu(display("Result link exists"))]
+    ResultLinkExists,
 }
 
 type RecipeResult<T> = Result<T, RecipeError>;

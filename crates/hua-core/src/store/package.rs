@@ -4,6 +4,7 @@ use super::{
 };
 use crate::{dependency::Requirement, extra::hash::PackageHash};
 use console::style;
+use log::debug;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
@@ -94,6 +95,7 @@ impl Package {
         path: P,
     ) -> io::Result<(bool, BTreeMap<Tree, ObjectId>, BTreeMap<Blob, ObjectId>)> {
         let PackageHash { root, trees, blobs } = PackageHash::from_path(path, &self.desc.name)?;
+        debug!("Calculated root {root}");
 
         Ok((self.id == root, trees, blobs))
     }

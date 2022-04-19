@@ -45,9 +45,12 @@ impl PackageHash {
         let mut tree = MerkleTree::<Blake3>::new();
         let mut dir_children: Vec<RawId> = Vec::new();
 
-        let root_path = path.as_ref();
+        let root_path = path
+            .as_ref()
+            .canonicalize()
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
 
-        for entry in WalkDir::new(root_path).contents_first(true) {
+        for entry in WalkDir::new(&root_path).contents_first(true) {
             let entry = entry?;
             let path = entry.path();
 
@@ -73,7 +76,7 @@ impl PackageHash {
                 tree.insert(hash);
                 dir_children.push(hash);
 
-                let path = path::relative_path_between(root_path, path)?;
+                let path = path::relative_path_between(&root_path, path)?;
                 blobs.insert(Blob::new(path), hash.into());
             } else if path.is_dir() {
                 let name = path.file_name().unwrap().to_str().unwrap();
@@ -83,7 +86,7 @@ impl PackageHash {
                 tree.commit();
 
                 let inner_children = std::mem::replace(&mut dir_children, Vec::new());
-                let path = path::relative_path_between(root_path, path)?;
+                let path = path::relative_path_between(&root_path, path)?;
                 let root = {
                     // Calculate root from another tree so that subelemnts of parallel directories
                     // are not included

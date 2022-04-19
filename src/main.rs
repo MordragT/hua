@@ -19,6 +19,8 @@ const USER_MANAGER_PATH: &str = "/hua/user";
 const GLOBAL_PATH: &str = "/usr";
 
 fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::init();
+
     let matches = Command::new("hua")
         .about("A simple package manager")
         .subcommand_required(true)
@@ -105,12 +107,21 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .value_of("PATH")
                     .expect("A path has to be provided when adding a package to the store");
 
+                let path = {
+                    let path = PathBuf::from(path);
+                    if path.is_symlink() {
+                        path.read_link()?
+                    } else {
+                        path
+                    }
+                };
+
                 let lock_data = fs::read(lock_file)?;
                 let package = toml::from_slice::<Package>(&lock_data)?;
 
                 let mut store = LocalStore::open(STORE_PATH)?;
 
-                println!("Package to add: {}", &package.desc);
+                println!("Package to add:\n{}", &package.desc);
                 if Confirm::new().with_prompt("Continue?").interact()? {
                     store.insert(package, path)?;
                     store.flush()?;

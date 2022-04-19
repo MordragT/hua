@@ -32,6 +32,8 @@ pub enum StoreError {
     RustbreakSaveDataError { source: rustbreak::RustbreakError },
     #[snafu(display("Store does not exists at {path:#?}"))]
     NotExisting { path: PathBuf },
+    #[snafu(display("VerifyIoError: {source}"))]
+    VerifyIoError { source: std::io::Error },
     #[snafu(display("IoError: {source}"))]
     IoError { source: std::io::Error },
     #[snafu(display("Could not link store objects from {original:#?} to {link:#?}: {source}"))]

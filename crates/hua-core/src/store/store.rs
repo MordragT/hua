@@ -1,3 +1,4 @@
+use log::info;
 use url::Url;
 
 use crate::{
@@ -256,14 +257,18 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
     /// Inserts a package into the store and returns true if the package was not present and was inserted
     /// and false if it was already present.
     pub fn insert<P: AsRef<Path>>(&mut self, package: Package, path: P) -> StoreResult<bool> {
-        let (verified, trees, blobs) = package.verify(&path).context(IoSnafu)?;
+        let (verified, trees, blobs) = package.verify(&path).context(VerifyIoSnafu)?;
 
         if !verified {
             return Err(StoreError::PackageNotVerified { package });
         }
 
+        info!("Verified {package}");
+
         let path_in_store = package.path_in_store(&self.source);
         fs::create_dir(&path_in_store).context(IoSnafu)?;
+
+        info!("Created {path_in_store:?}");
 
         let Package {
             id: package_id,
@@ -293,6 +298,8 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
                     self.objects_mut().insert(id, tree.into());
                 }
             }
+
+            info!("Package directories created");
 
             for (blob, id) in blobs {
                 let dest = blob.to_path(&path_in_store);
@@ -335,6 +342,8 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
                     object_ids.insert(id);
                 }
             }
+
+            info!("Blobs copied or linked");
 
             assert!(self
                 .packages_mut()

@@ -12,19 +12,14 @@ use crate::{
 };
 use cached_path::{Cache, Options};
 use fs_extra::dir::CopyOptions;
+use log::{debug, info};
 use relative_path::RelativePathBuf;
 use semver::Version;
-use std::{
-    collections::HashSet,
-    fs::{self, File},
-    io::Write,
-    path::PathBuf,
-};
+use std::{collections::HashSet, fs::File, io::Write, os::unix, path::PathBuf};
 use temp_dir::TempDir;
 
 // TODO: implement patches, allow multiple sources ?
 
-const LOCAL_BUILD_PATH: &str = "result/";
 const BUILD_PATH: &str = "/tmp/build/";
 const BUILD_SCRIPT_PATH: &str = "/tmp/build.sh";
 
@@ -44,6 +39,7 @@ pub struct Recipe {
     jail: Option<JailBuilder>,
     shell: Option<ShellBuilder>,
     build_dir: Option<PathBuf>,
+    temp_dir: Option<TempDir>,
 }
 
 impl Recipe {
@@ -74,6 +70,7 @@ impl Recipe {
             jail: None,
             shell: None,
             build_dir: None,
+            temp_dir: None,
         }
     }
 
@@ -85,21 +82,40 @@ impl Recipe {
         super::check_archs(self.archs)?;
         super::check_platforms(self.platforms)?;
 
+        info!("Checked architecture and platform");
+
+        let lock_path = PathBuf::from(format!("{}.lock", self.name));
+        if lock_path.exists() {
+            return Err(RecipeError::LockFileExists { path: lock_path });
+        }
+        let link = PathBuf::from("result");
+        if link.exists() {
+            return Err(RecipeError::ResultLinkExists);
+        }
+
+        info!("Checked lock file and result link");
+
         let path = cache
             .cached_path_with_options(&self.source, &Options::default().extract())
             .context(CacheSnafu)?;
 
-        let build_dir = PathBuf::from(LOCAL_BUILD_PATH);
-        if build_dir.exists() {
-            fs::remove_dir_all(&build_dir).context(IoSnafu)?;
-        }
+        info!("Downloaded source");
+
+        let temp_dir = TempDir::new().context(IoSnafu)?;
+
+        let build_dir = temp_dir.child("build");
+
+        info!("Build directory created");
 
         let mut copy_options = CopyOptions::default();
         copy_options.copy_inside = true;
         copy_options.skip_exist = true;
         fs_extra::dir::copy(path, &build_dir, &copy_options).context(FsExtraSnafu)?;
 
+        info!("Copied downloaded data into build directory");
+
         self.build_dir = Some(build_dir);
+        self.temp_dir = Some(temp_dir);
         Ok(self)
     }
 
@@ -122,16 +138,22 @@ impl Recipe {
             .chain(self.requires_build.clone().into_iter());
 
         let jail = JailBuilder::new()
-            .bind(Bind::read_write(build_dir, BUILD_PATH))
+            .bind(Bind::read_write(&build_dir, BUILD_PATH))
             .envs(vars)
             .current_dir(BUILD_PATH);
+
+        info!("Created jail");
 
         let shell = ShellBuilder::new()
             .context(ShellSnafu)?
             .with_requirements(requirements, &store)
             .context(ShellSnafu)?;
 
+        info!("Created shell env");
+
         let jail = shell.apply(jail).context(ShellSnafu)?;
+
+        info!("Applied shell env to jail");
 
         self.shell = Some(shell);
         self.jail = Some(jail);
@@ -143,11 +165,13 @@ impl Recipe {
     pub fn build(self, script: String) -> RecipeResult<(Package, PathBuf)> {
         let jail = self.jail.ok_or(RecipeError::MissingJail)?;
         let build_dir = self.build_dir.ok_or(RecipeError::MissingSourceFiles)?;
+        let temp_dir = self.temp_dir.ok_or(RecipeError::MissingTempDir)?;
 
-        let temp_dir = TempDir::new().context(IoSnafu)?;
         let script_path = temp_dir.child(&self.name);
         let mut script_file = File::create(&script_path).context(IoSnafu)?;
         script_file.write(script.as_bytes()).context(IoSnafu)?;
+
+        temp_dir.leak();
 
         let mut process = jail
             .bind(Bind::read_only(script_path, BUILD_SCRIPT_PATH))
@@ -158,15 +182,19 @@ impl Recipe {
         let ecode = process.wait().context(IoSnafu)?;
         assert!(ecode.success());
 
-        let absolute_target_dir = self
-            .target_dir
-            .to_path(build_dir.canonicalize().context(IoSnafu)?);
+        info!("Completed build script");
+
+        let absolute_target_dir = self.target_dir.to_path(build_dir);
+
+        debug!("Calculated absolute dir {absolute_target_dir:?}");
 
         let PackageHash {
             root,
             trees: _,
             blobs: _,
         } = PackageHash::from_path(&absolute_target_dir, &self.name).context(IoSnafu)?;
+
+        debug!("Calculated package id");
 
         let desc = PackageDesc::new(
             self.name,
@@ -180,11 +208,15 @@ impl Recipe {
         let toml = toml::to_vec(&package).context(TomlSerilizationSnafu)?;
 
         let lock_path = PathBuf::from(format!("{}.lock", package.name()));
-        if lock_path.exists() {
-            fs::remove_file(&lock_path).context(IoSnafu)?;
-        }
-        let mut lock = File::create(lock_path).context(IoSnafu)?;
+        let mut lock = File::create(&lock_path).context(IoSnafu)?;
         lock.write_all(&toml).context(IoSnafu)?;
+
+        info!("Created lock: {lock_path:?}");
+
+        let link = PathBuf::from("result");
+        unix::fs::symlink(&absolute_target_dir, link).context(IoSnafu)?;
+
+        info!("Created result link");
 
         Ok((package, absolute_target_dir))
     }
