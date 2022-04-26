@@ -5,16 +5,23 @@ use console::style;
 use dialoguer::{Confirm, Select};
 use hua_core::{
     cache::CacheBuilder,
+    config::Config,
     extra::path::ComponentPathBuf,
     jail::{Bind, JailBuilder},
     recipe::{self, RecipeData},
     shell::ShellBuilder,
-    store::{package::Package, LocalStore, STORE_PATH},
+    store::{
+        locator::{Locator, Source},
+        package::Package,
+        LocalStore, STORE_PATH,
+    },
+    url::Url,
     user::UserManager,
 };
 use std::{error::Error, fs, path::PathBuf};
 
 const HUA_PATH: &str = "/hua";
+const CONFIG_PATH: &str = "/hua/config.toml";
 const USER_MANAGER_PATH: &str = "/hua/user";
 const GLOBAL_PATH: &str = "/usr";
 
@@ -60,7 +67,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             Command::new("shell")
                 .about("Create a new shell with the specified packages in scope")
                 .arg_required_else_help(true)
-                .arg(arg!(<NAME> ... "The names of the packages to include in scope"))
+                .arg(arg!(<NAME> ... "The names of the packages to include in scope")),
+            Command::new("cache").about("Change caches").arg_required_else_help(true).subcommands([
+                Command::new("add").about("Adds a cache").arg(arg!(<URL> "The url of the cache")),
+                Command::new("remove").about("Removes a cache"),
+            ])
         ]).get_matches();
 
     match matches.subcommand() {
@@ -80,6 +91,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             let _store = LocalStore::init(STORE_PATH)?;
             let _user_manager = UserManager::init(USER_MANAGER_PATH)?;
+            let _config = Config::init(CONFIG_PATH, Vec::new())?;
+
             println!("Files and folders created");
         }
         Some(("store", sub_matches)) => match sub_matches.subcommand() {
@@ -158,16 +171,34 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .value_of("NAME")
                 .expect("When adding a package, a name has to be given.");
 
-            let store = LocalStore::open(STORE_PATH)?;
+            let mut store = LocalStore::open(STORE_PATH)?;
             let mut user_manager = UserManager::open(USER_MANAGER_PATH)?;
+            let config = Config::open(CONFIG_PATH)?;
+            let locator = Locator::new(config.to_caches().into_iter())?;
 
-            let (names, packages): (Vec<_>, Vec<_>) = store
-                .packages()
-                .filter_by_name_containing(name)
-                .map(|(id, desc, objects)| {
+            // let (names, packages): (Vec<_>, Vec<_>) = store
+            //     .packages()
+            //     .filter_by_name_containing(name)
+            //     .map(|(id, desc, objects)| {
+            //         (
+            //             format!("{} {}", style(&desc.name).green(), desc.version),
+            //             (id, desc, objects),
+            //         )
+            //     })
+            //     .unzip();
+            let (mut names, mut packages): (Vec<_>, Vec<_>) = locator
+                .filter_by_name_containing(name, &store)
+                .map(|(id, desc, source)| {
                     (
-                        format!("{} {}", style(&desc.name).green(), desc.version),
-                        (id, desc, objects),
+                        match &source {
+                            Source::Local => {
+                                format!("{} {}", style(&desc.name).green(), desc.version)
+                            }
+                            Source::Remote(url) => {
+                                format!("{} {} {url}", style(&desc.name).green(), desc.version)
+                            }
+                        },
+                        (id, desc, source),
                     )
                 })
                 .unzip();
@@ -177,11 +208,20 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .items(&names)
                 .interact_opt()?;
 
-            if let Some(selection) = selection {
-                let name = &names[selection];
-                let (id, desc, _objects) = packages[selection];
-                let blobs = unsafe { store.get_blobs_cloned_of_package(id).unwrap_unchecked() };
-                let req = (desc.clone(), blobs.collect()).into();
+            if let Some(index) = selection {
+                let name = names.remove(index);
+                let (id, desc, source) = packages.remove(index);
+                let id = *id;
+                let desc = desc.clone();
+
+                if let Source::Remote(url) = source && !store.packages().contains(&id) {
+                    let cache = CacheBuilder::default().build()?;
+                    let path = cache.cached_path(url.as_str())?;
+                    store.insert(Package::new(id, desc.clone()), path)?;
+                }
+
+                let blobs = unsafe { store.get_blobs_cloned_of_package(&id).unwrap_unchecked() };
+                let req = (desc, blobs.collect()).into();
 
                 user_manager.insert_requirement(req, &store)?;
 
@@ -265,6 +305,35 @@ fn main() -> Result<(), Box<dyn Error>> {
             let mut child = jail.arg("sh").run()?;
             child.wait()?;
         }
+        Some(("cache", sub_matches)) => match sub_matches.subcommand() {
+            Some(("add", sub_matches)) => {
+                let url = sub_matches
+                    .value_of("URL")
+                    .expect("When adding a cache a url has to be provided");
+                let url = Url::parse(url)?;
+
+                let mut config = Config::open(CONFIG_PATH)?;
+                config.add_cache(url.clone());
+
+                println!("{} {url} added", style("Success").green());
+            }
+            Some(("remove", _)) => {
+                let mut config = Config::open(CONFIG_PATH)?;
+
+                let selection = Select::new()
+                    .with_prompt("Wich cache to remove (cancel with ESC or q)?")
+                    .items(config.caches())
+                    .interact_opt()?;
+
+                if let Some(index) = selection {
+                    let removed = config.remove_cache(index);
+                    println!("{} {removed} removed", style("Success").green());
+                } else {
+                    println!("Nothing removed");
+                }
+            }
+            _ => unreachable!(),
+        },
         _ => unreachable!(),
     }
 

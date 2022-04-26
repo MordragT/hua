@@ -12,6 +12,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+// TODO when switching generations also delete the old folders
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct GenerationManager {
     path: PathBuf,

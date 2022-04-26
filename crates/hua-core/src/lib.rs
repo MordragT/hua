@@ -22,3 +22,50 @@ pub mod cache {
 pub mod version {
     pub use semver::{Version, VersionReq};
 }
+
+pub mod url {
+    pub use url::Url;
+}
+
+pub mod config {
+    use std::{error::Error, fs, path::Path};
+
+    use serde::{Deserialize, Serialize};
+    use url::Url;
+
+    #[derive(Debug, Deserialize, Serialize, Clone, Default)]
+    pub struct Config {
+        caches: Vec<Url>,
+    }
+
+    impl Config {
+        pub fn init<P: AsRef<Path>>(path: P, caches: Vec<Url>) -> Result<Self, Box<dyn Error>> {
+            let config = Self { caches };
+            let bytes = toml::to_vec(&config)?;
+            fs::write(path, bytes)?;
+            Ok(config)
+        }
+
+        pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn Error>> {
+            let bytes = fs::read(path)?;
+            let config = toml::from_slice(&bytes)?;
+            Ok(config)
+        }
+
+        pub fn add_cache(&mut self, cache: Url) {
+            self.caches.push(cache);
+        }
+
+        pub fn remove_cache(&mut self, index: usize) -> Url {
+            self.caches.remove(index)
+        }
+
+        pub fn caches(&self) -> &Vec<Url> {
+            &self.caches
+        }
+
+        pub fn to_caches(self) -> Vec<Url> {
+            self.caches
+        }
+    }
+}

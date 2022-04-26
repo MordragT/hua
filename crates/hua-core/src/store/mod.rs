@@ -6,12 +6,11 @@ use self::{
 use snafu::prelude::*;
 use std::path::PathBuf;
 
-pub use locator::Locator;
 pub use store::*;
 
 pub mod backend;
 pub mod id;
-mod locator;
+pub mod locator;
 pub mod object;
 pub mod package;
 mod store;

@@ -1,12 +1,16 @@
+use std::collections::HashSet;
+
 use url::Url;
 
 use super::{
-    backend::ReadBackend, id::PackageId, package::PackageDesc, RemoteStore, Store, StoreResult,
+    id::{ObjectId, PackageId},
+    package::PackageDesc,
+    LocalStore, RemoteStore, StoreResult,
 };
 
 pub enum Source {
     Local,
-    Remote(usize),
+    Remote(Url),
 }
 
 #[derive(Debug)]
@@ -27,22 +31,70 @@ impl Locator {
         Ok(Self { remotes })
     }
 
-    pub fn find_by_name<'a, S, B: ReadBackend>(
+    pub fn filter_by_name_containing<'a>(
         &'a self,
-        name: &str,
-        local: &'a Store<S, B>,
-    ) -> Option<(&'a PackageId, &'a PackageDesc, Source)> {
-        if let Some((id, desc)) = local.packages().find_by_name(name) {
+        slice: &'a str,
+        local: &'a LocalStore,
+    ) -> impl Iterator<Item = (&'a PackageId, &'a PackageDesc, Source)> + 'a {
+        let remote_iter = self
+            .remotes
+            .iter()
+            .map(move |remote| {
+                remote
+                    .packages()
+                    .filter(move |_id, desc, _set| desc.name.contains(slice))
+                    .map(|(id, desc, _set)| {
+                        let url = unsafe {
+                            remote
+                                .packages()
+                                .url_in_store(id, remote.url())
+                                .unwrap_unchecked()
+                        };
+                        (id, desc, Source::Remote(url))
+                    })
+            })
+            .flatten();
+
+        local
+            .packages()
+            .filter(move |_id, desc, _set| desc.name.contains(slice))
+            .map(|(id, desc, _set)| (id, desc, Source::Local))
+            .chain(remote_iter)
+    }
+
+    pub fn find<'a, P>(
+        &'a self,
+        predicate: P,
+        local: &'a LocalStore,
+    ) -> Option<(&'a PackageId, &'a PackageDesc, Source)>
+    where
+        P: Fn(&PackageId, &PackageDesc, &HashSet<ObjectId>) -> bool,
+    {
+        if let Some((id, desc)) = local.packages().find(&predicate) {
             return Some((id, desc, Source::Local));
         }
 
-        for (n, remote) in self.remotes.iter().enumerate() {
-            if let Some((id, desc)) = remote.packages().find_by_name(name) {
-                return Some((id, desc, Source::Remote(n)));
+        for remote in self.remotes.iter() {
+            if let Some((id, desc)) = remote.packages().find(&predicate) {
+                let url = unsafe {
+                    remote
+                        .packages()
+                        .url_in_store(id, remote.url())
+                        .unwrap_unchecked()
+                };
+                return Some((id, desc, Source::Remote(url)));
             }
         }
 
         return None;
+    }
+
+    pub fn find_by_name_containing<'a>(
+        &'a self,
+        slice: &str,
+        local: &'a LocalStore,
+    ) -> Option<(&'a PackageId, &'a PackageDesc, Source)> {
+        self.find(|_id, desc, _set| desc.name.contains(slice), local)
     }
 
     pub fn get_url(&self, index: usize) -> Option<&Url> {
