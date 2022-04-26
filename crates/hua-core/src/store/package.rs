@@ -5,6 +5,7 @@ use super::{
 use crate::{dependency::Requirement, extra::hash::PackageHash};
 use console::style;
 use log::debug;
+use relative_path::RelativePathBuf;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
@@ -103,6 +104,10 @@ impl Package {
     pub fn path_in_store<P: AsRef<Path>>(&self, store_path: P) -> PathBuf {
         let name_version_id = format!("{}-{}-{}", self.desc.name, self.desc.version, self.id);
         store_path.as_ref().join(name_version_id)
+    }
+
+    pub fn relative_path(&self) -> RelativePathBuf {
+        format!("{}-{}-{}", self.desc.name, self.desc.version, self.id).into()
     }
 }
 

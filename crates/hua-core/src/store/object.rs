@@ -7,6 +7,7 @@ use std::{
     fmt,
     path::{Path, PathBuf},
 };
+use url::Url;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Blob {
@@ -109,6 +110,14 @@ impl Object {
             Self::Tree(tree) => tree.to_path(base),
             Self::Blob(blob) => blob.to_path(base),
             Self::Link(link) => link.to_path(base),
+        }
+    }
+
+    pub fn to_url(&self, url: &Url) -> Url {
+        match &self {
+            Self::Tree(tree) => url.join(tree.path.as_str()).unwrap(),
+            Self::Blob(blob) => url.join(blob.path.as_str()).unwrap(),
+            Self::Link(link) => url.join(link.link.as_str()).unwrap(),
         }
     }
 

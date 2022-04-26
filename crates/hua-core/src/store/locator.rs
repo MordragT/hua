@@ -1,16 +1,9 @@
-use std::collections::HashSet;
-
+use super::{id::PackageId, package::PackageDesc, LocalStore, RemoteStore, StoreResult};
 use url::Url;
-
-use super::{
-    id::{ObjectId, PackageId},
-    package::PackageDesc,
-    LocalStore, RemoteStore, StoreResult,
-};
 
 pub enum Source {
     Local,
-    Remote(Url),
+    Remote(Vec<Url>),
 }
 
 #[derive(Debug)]
@@ -43,14 +36,19 @@ impl Locator {
                 remote
                     .packages()
                     .filter(move |_id, desc, _set| desc.name.contains(slice))
-                    .map(|(id, desc, _set)| {
+                    .map(|(id, desc, set)| {
                         let url = unsafe {
                             remote
                                 .packages()
                                 .url_in_store(id, remote.url())
                                 .unwrap_unchecked()
                         };
-                        (id, desc, Source::Remote(url))
+                        let objects = remote
+                            .objects()
+                            .get_multiple(set.iter())
+                            .map(|(_id, object)| object.to_url(&url))
+                            .collect();
+                        (id, desc, Source::Remote(objects))
                     })
             })
             .flatten();
@@ -62,40 +60,40 @@ impl Locator {
             .chain(remote_iter)
     }
 
-    pub fn find<'a, P>(
-        &'a self,
-        predicate: P,
-        local: &'a LocalStore,
-    ) -> Option<(&'a PackageId, &'a PackageDesc, Source)>
-    where
-        P: Fn(&PackageId, &PackageDesc, &HashSet<ObjectId>) -> bool,
-    {
-        if let Some((id, desc)) = local.packages().find(&predicate) {
-            return Some((id, desc, Source::Local));
-        }
+    // pub fn find<'a, P>(
+    //     &'a self,
+    //     predicate: P,
+    //     local: &'a LocalStore,
+    // ) -> Option<(&'a PackageId, &'a PackageDesc, Source)>
+    // where
+    //     P: Fn(&PackageId, &PackageDesc, &HashSet<ObjectId>) -> bool,
+    // {
+    //     if let Some((id, desc)) = local.packages().find(&predicate) {
+    //         return Some((id, desc, Source::Local));
+    //     }
 
-        for remote in self.remotes.iter() {
-            if let Some((id, desc)) = remote.packages().find(&predicate) {
-                let url = unsafe {
-                    remote
-                        .packages()
-                        .url_in_store(id, remote.url())
-                        .unwrap_unchecked()
-                };
-                return Some((id, desc, Source::Remote(url)));
-            }
-        }
+    //     for remote in self.remotes.iter() {
+    //         if let Some((id, desc)) = remote.packages().find(&predicate) {
+    //             let url = unsafe {
+    //                 remote
+    //                     .packages()
+    //                     .url_in_store(id, remote.url())
+    //                     .unwrap_unchecked()
+    //             };
+    //             return Some((id, desc, Source::Remote(url)));
+    //         }
+    //     }
 
-        return None;
-    }
+    //     return None;
+    // }
 
-    pub fn find_by_name_containing<'a>(
-        &'a self,
-        slice: &str,
-        local: &'a LocalStore,
-    ) -> Option<(&'a PackageId, &'a PackageDesc, Source)> {
-        self.find(|_id, desc, _set| desc.name.contains(slice), local)
-    }
+    // pub fn find_by_name_containing<'a>(
+    //     &'a self,
+    //     slice: &str,
+    //     local: &'a LocalStore,
+    // ) -> Option<(&'a PackageId, &'a PackageDesc, Source)> {
+    //     self.find(|_id, desc, _set| desc.name.contains(slice), local)
+    // }
 
     pub fn get_url(&self, index: usize) -> Option<&Url> {
         self.remotes.get(index).map(|store| store.url())

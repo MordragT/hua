@@ -16,7 +16,7 @@ mod support;
 pub mod user;
 
 pub mod cache {
-    pub use cached_path::{Cache, CacheBuilder};
+    pub use cached_path::{Cache, CacheBuilder, Options};
 }
 
 pub mod version {

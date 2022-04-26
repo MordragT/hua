@@ -4,7 +4,7 @@ use clap::{arg, Command};
 use console::style;
 use dialoguer::{Confirm, Select};
 use hua_core::{
-    cache::CacheBuilder,
+    cache::{CacheBuilder, Options},
     config::Config,
     extra::path::ComponentPathBuf,
     jail::{Bind, JailBuilder},
@@ -60,6 +60,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .about("Creates a new generation without the specified package and switches to the generation")
                 .arg_required_else_help(true)
                 .arg(arg!(<NAME> "The name of package")),
+            // TODO search
             Command::new("build")
                 .about("Builds a recipe to a new package")
                 .arg_required_else_help(true)
@@ -69,6 +70,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .arg_required_else_help(true)
                 .arg(arg!(<NAME> ... "The names of the packages to include in scope")),
             Command::new("cache").about("Change caches").arg_required_else_help(true).subcommands([
+                // TODO add list
                 Command::new("add").about("Adds a cache").arg(arg!(<URL> "The url of the cache")),
                 Command::new("remove").about("Removes a cache"),
             ])
@@ -192,10 +194,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                     (
                         match &source {
                             Source::Local => {
-                                format!("{} {}", style(&desc.name).green(), desc.version)
+                                format!("{} {} local", style(&desc.name).green(), desc.version)
                             }
-                            Source::Remote(url) => {
-                                format!("{} {} {url}", style(&desc.name).green(), desc.version)
+                            Source::Remote(_) => {
+                                format!("{} {} remote", style(&desc.name).green(), desc.version)
                             }
                         },
                         (id, desc, source),
@@ -214,10 +216,19 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let id = *id;
                 let desc = desc.clone();
 
-                if let Source::Remote(url) = source && !store.packages().contains(&id) {
+                if let Source::Remote(urls) = source && !store.packages().contains(&id) {
                     let cache = CacheBuilder::default().build()?;
-                    let path = cache.cached_path(url.as_str())?;
-                    store.insert(Package::new(id, desc.clone()), path)?;
+                    let package = Package::new(id, desc.clone());
+
+                    let relative = package.relative_path();
+                    let absolute = relative.to_path(&cache.dir);
+                    let options = Options::default().subdir(relative.as_str());
+
+                    for url in urls {
+                        let _path = cache.cached_path_with_options(url.as_str(), &options)?;
+                    }
+
+                    store.insert(package, absolute)?;
                 }
 
                 let blobs = unsafe { store.get_blobs_cloned_of_package(&id).unwrap_unchecked() };
