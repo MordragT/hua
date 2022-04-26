@@ -314,6 +314,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 let mut config = Config::open(CONFIG_PATH)?;
                 config.add_cache(url.clone());
+                config.flush()?;
 
                 println!("{} {url} added", style("Success").green());
             }
@@ -327,6 +328,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 if let Some(index) = selection {
                     let removed = config.remove_cache(index);
+                    config.flush()?;
                     println!("{} {removed} removed", style("Success").green());
                 } else {
                     println!("Nothing removed");

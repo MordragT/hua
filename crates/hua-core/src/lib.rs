@@ -28,21 +28,29 @@ pub mod url {
 }
 
 pub mod config {
-    use std::{error::Error, fs, path::Path};
+    use std::{
+        error::Error,
+        fs,
+        path::{Path, PathBuf},
+    };
 
     use serde::{Deserialize, Serialize};
     use url::Url;
 
     #[derive(Debug, Deserialize, Serialize, Clone, Default)]
     pub struct Config {
+        path: PathBuf,
         caches: Vec<Url>,
     }
 
     impl Config {
         pub fn init<P: AsRef<Path>>(path: P, caches: Vec<Url>) -> Result<Self, Box<dyn Error>> {
-            let config = Self { caches };
+            let config = Self {
+                caches,
+                path: path.as_ref().to_owned(),
+            };
             let bytes = toml::to_vec(&config)?;
-            fs::write(path, bytes)?;
+            fs::write(&config.path, bytes)?;
             Ok(config)
         }
 
@@ -58,6 +66,13 @@ pub mod config {
 
         pub fn remove_cache(&mut self, index: usize) -> Url {
             self.caches.remove(index)
+        }
+
+        pub fn flush(&self) -> Result<(), Box<dyn Error>> {
+            let bytes = toml::to_vec(&self)?;
+            fs::remove_file(&self.path)?;
+            fs::write(&self.path, bytes)?;
+            Ok(())
         }
 
         pub fn caches(&self) -> &Vec<Url> {
