@@ -4,7 +4,7 @@ use clap::{arg, Command};
 use console::style;
 use dialoguer::{Confirm, Select};
 use hua_core::{
-    cache::{CacheBuilder, Options},
+    cache::{CacheBuilder},
     config::Config,
     extra::path::ComponentPathBuf,
     jail::{Bind, JailBuilder},
@@ -24,6 +24,7 @@ const HUA_PATH: &str = "/hua";
 const CONFIG_PATH: &str = "/hua/config.toml";
 const USER_MANAGER_PATH: &str = "/hua/user";
 const GLOBAL_PATH: &str = "/usr";
+const REMOTE_TMP: &str = "/tmp/remote";
 
 fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
@@ -196,7 +197,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                             Source::Local => {
                                 format!("{} {} local", style(&desc.name).green(), desc.version)
                             }
-                            Source::Remote(_) => {
+                            Source::Remote { base: _, objects: _ } => {
                                 format!("{} {} remote", style(&desc.name).green(), desc.version)
                             }
                         },
@@ -216,16 +217,28 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let id = *id;
                 let desc = desc.clone();
 
-                if let Source::Remote(urls) = source && !store.packages().contains(&id) {
+                if let Source::Remote { base, objects } = source && !store.packages().contains(&id) {
                     let cache = CacheBuilder::default().build()?;
                     let package = Package::new(id, desc.clone());
 
-                    let relative = package.relative_path();
-                    let absolute = relative.to_path(&cache.dir);
-                    let options = Options::default().subdir(relative.as_str());
+                    let absolute = package.relative_path().to_path(REMOTE_TMP);
+                    
+                    if absolute.exists() {
+                        fs::remove_dir_all(&absolute)?;
+                    }
+                    fs::create_dir_all(&absolute)?;
 
-                    for url in urls {
-                        let _path = cache.cached_path_with_options(url.as_str(), &options)?;
+                    for url in objects {
+                        let path = cache.cached_path(url.as_str())?;
+                        let relative = base.make_relative(&url).unwrap();
+
+                        let dest = absolute.join(relative);
+                        let parent = dest.parent().unwrap();
+                        if !parent.exists() {
+                            fs::create_dir_all(parent)?;
+                        }
+
+                        fs::copy(path, dest)?;
                     }
 
                     store.insert(package, absolute)?;

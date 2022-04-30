@@ -3,7 +3,7 @@ use url::Url;
 
 pub enum Source {
     Local,
-    Remote(Vec<Url>),
+    Remote { base: Url, objects: Vec<Url> },
 }
 
 #[derive(Debug)]
@@ -46,9 +46,15 @@ impl Locator {
                         let objects = remote
                             .objects()
                             .get_multiple(set.iter())
-                            .map(|(_id, object)| object.to_url(&url))
+                            .filter_map(|(_id, object)| {
+                                if object.is_blob() {
+                                    Some(object.to_url(&url))
+                                } else {
+                                    None
+                                }
+                            })
                             .collect();
-                        (id, desc, Source::Remote(objects))
+                        (id, desc, Source::Remote { base: url, objects })
                     })
             })
             .flatten();

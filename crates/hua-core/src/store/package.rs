@@ -202,7 +202,7 @@ impl Packages {
 
     pub fn url_in_store(&self, id: &PackageId, store_url: &Url) -> Option<Url> {
         if let Some(desc) = self.get(id) {
-            let name_version_id = format!("{}-{}-{}", desc.name, desc.version, id);
+            let name_version_id = format!("{}-{}-{}/", desc.name, desc.version, id);
             Some(
                 store_url
                     .join(&name_version_id)
