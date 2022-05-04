@@ -110,7 +110,7 @@ impl Recipe {
         let mut copy_options = CopyOptions::default();
         copy_options.copy_inside = true;
         copy_options.skip_exist = true;
-        fs_extra::dir::copy(path, &build_dir, &copy_options).context(FsExtraSnafu)?;
+        fs_extra::dir::copy(dbg!(path), &build_dir, &copy_options).context(FsExtraSnafu)?;
 
         info!("Copied downloaded data into build directory");
 

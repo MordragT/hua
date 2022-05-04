@@ -134,7 +134,6 @@ pub fn link_component_paths(
     from: &ComponentPathBuf,
     to: &ComponentPathBuf,
 ) -> Result<HashSet<PathBuf>> {
-    to.create_dirs()?;
     let mut collector = HashSet::new();
 
     inner_io_task_to(

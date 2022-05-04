@@ -1,24 +1,22 @@
-use log::{info, warn};
-use url::Url;
-
-use crate::{
-    dependency::Requirement,
-    extra::{path::ComponentPathBuf, style::ProgressBar},
-    user::UserManager,
-};
-use std::{
-    collections::HashSet,
-    fs::{self},
-    os::unix::{self, prelude::PermissionsExt},
-    path::{Path, PathBuf},
-};
-
 use super::{
     backend::{LocalBackend, ReadBackend, RemoteBackend, WriteBackend},
     object::{Blob, Objects},
     package::{PackageDesc, Packages},
     *,
 };
+use crate::{
+    dependency::Requirement,
+    extra::{path::ComponentPathBuf, style::ProgressBar},
+    user::UserManager,
+};
+use log::{info, warn};
+use std::{
+    collections::HashSet,
+    fs::{self},
+    os::unix::{self},
+    path::{Path, PathBuf},
+};
+use url::Url;
 
 /// The filename of the packages database of the store
 const PACKAGES_DB: &str = "packages.db";
@@ -87,8 +85,6 @@ impl<B: ReadBackend<Source = PathBuf>> Store<PathBuf, B> {
             .path_in_store(package_id, &self.source)
             .ok_or(StoreError::PackageNotFoundById { id: *package_id })?;
 
-        to.create_dirs().context(IoSnafu)?;
-
         // I checked beforehand if package is in scope
         let object_ids = unsafe { self.packages().get_children(package_id).unwrap_unchecked() };
 
@@ -127,6 +123,7 @@ impl<B: ReadBackend<Source = PathBuf>> Store<PathBuf, B> {
                 _ => (),
             }
         }
+
         Ok(())
     }
 
@@ -149,6 +146,7 @@ impl<B: WriteBackend<Source = PathBuf>> Store<PathBuf, B> {
     pub fn init<P: AsRef<Path>>(path: P) -> StoreResult<Self> {
         let path = path.as_ref().to_owned();
         fs::create_dir(&path).context(IoSnafu)?;
+        unix::fs::chown(&path, Some(0), Some(0)).context(IoSnafu)?;
 
         let backend = B::init(path.join(PACKAGES_DB))?;
 
@@ -264,6 +262,7 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
 
         let path_in_store = package.path_in_store(&self.source);
         fs::create_dir(&path_in_store).context(IoSnafu)?;
+        unix::fs::chown(&path_in_store, Some(0), Some(0)).context(IoSnafu)?;
 
         info!("Created {path_in_store:?}");
 
@@ -288,7 +287,8 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
             // should be ordered (by BTreeMap and Object::cmp) so that trees with lower depth come first
             for (tree, id) in trees {
                 let dest = tree.to_path(&path_in_store);
-                fs::create_dir(&dest).context(CreateTreeSnafu { path: dest })?;
+                fs::create_dir(&dest).context(CreateTreeSnafu { path: dest.clone() })?;
+                unix::fs::chown(&dest, Some(0), Some(0)).context(IoSnafu)?;
                 object_ids.insert(id);
 
                 if !self.objects().contains(&id) {
@@ -331,8 +331,9 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
                     fs::copy(&source, &dest).context(CopyObjectSnafu {
                         kind: ObjectKind::Blob,
                         src: source,
-                        dest,
+                        dest: dest.clone(),
                     })?;
+                    unix::fs::chown(&dest, Some(0), Some(0)).context(IoSnafu)?;
 
                     let old = self.objects_mut().insert(id, blob.into());
                     assert!(old.is_none());
@@ -385,6 +386,14 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
                 };
 
                 fs::remove_dir_all(root).context(IoSnafu)?;
+                let (_desc, objects) =
+                    unsafe { self.packages_mut().remove(package_id).unwrap_unchecked() };
+                assert!(self
+                    .objects_mut()
+                    .remove_objects(objects.iter())
+                    .collect::<Option<Vec<_>>>()
+                    .is_some());
+
                 bar.inc(1);
             }
 
@@ -398,6 +407,13 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
                 };
 
                 fs::remove_dir_all(root).context(IoSnafu)?;
+                let (_desc, objects) =
+                    unsafe { self.packages_mut().remove(package_id).unwrap_unchecked() };
+                assert!(self
+                    .objects_mut()
+                    .remove_objects(objects.iter())
+                    .collect::<Option<Vec<_>>>()
+                    .is_some());
             }
         }
 
@@ -408,10 +424,10 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
     pub fn flush(self) -> StoreResult<()> {
         self.backend.flush()?;
 
-        let path = self.source.join(PACKAGES_DB);
-        let mut perm = fs::metadata(&path).context(IoSnafu)?.permissions();
-        perm.set_mode(0o644);
-        fs::set_permissions(path, perm).context(IoSnafu)?;
+        // let path = self.source.join(PACKAGES_DB);
+        // let mut perm = fs::metadata(&path).context(IoSnafu)?.permissions();
+        // perm.set_mode(0o644);
+        // fs::set_permissions(path, perm).context(IoSnafu)?;
 
         Ok(())
     }
@@ -553,7 +569,7 @@ mod tests {
         let global_temp_path = temp_dir.child("global");
         fs::create_dir(&global_temp_path).unwrap();
         let global_paths = ComponentPathBuf::from_path(&global_temp_path);
-        global_paths.create_dirs().unwrap();
+        global_paths.create_dirs(true).unwrap();
 
         store.link_package(&package_id, &global_paths).unwrap();
 

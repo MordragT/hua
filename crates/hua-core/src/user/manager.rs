@@ -1,100 +1,25 @@
 use crate::{
     dependency::Requirement,
-    extra::{path::ComponentPathBuf, persist::Pot},
+    extra::path::ComponentPathBuf,
     generation::GenerationManager,
     store::{backend::ReadBackend, id::PackageId, Store},
     user::User,
 };
-use rustbreak::{Database, PathDatabase};
-use serde::{Deserialize, Serialize};
+use log::debug;
 use snafu::ResultExt;
 use std::{
     fs,
-    os::unix::prelude::PermissionsExt,
+    os::unix::{self, prelude::PermissionsExt},
     path::{Path, PathBuf},
 };
 
 use super::*;
 
-/// The filename of the users database
-pub const USERS_DB: &str = "users.db";
-
-// TODO: instead of allowing the db to be written by everybody
-// ditch the db all together and implement a file based solution
-
-// TODO change Users to simple Vec as the current user
-// must not be saved inside the database (it can change all the time anyway)
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct Users {
-    pub current: usize,
-    pub list: Vec<User>,
-}
-
-impl Users {
-    pub fn init<P: AsRef<Path>>(path: P) -> UserResult<Self> {
-        let current = 0;
-        let mut list = Vec::new();
-
-        let name = users::get_current_username()
-            .ok_or(UserError::UsernameNotFound)?
-            .into_string()
-            .map_err(|_| UserError::Whatever {
-                message: "OsString conversion error".to_owned(),
-            })?;
-
-        let path = path.as_ref().join(&name);
-        fs::create_dir(&path).context(IoSnafu)?;
-
-        let user = User::init(path, name)?;
-        list.push(user);
-
-        Ok(Self { current, list })
-    }
-
-    pub fn insert<P: AsRef<Path>>(&mut self, name: String, path: P) -> UserResult<()> {
-        let path = path.as_ref().join(&name);
-        fs::create_dir(&path).context(IoSnafu)?;
-
-        let user = User::init(path, name)?;
-
-        let current = self.list.len();
-        self.list.push(user);
-        self.current = current;
-
-        Ok(())
-    }
-
-    pub fn find(&self, name: &String) -> Option<usize> {
-        self.list
-            .iter()
-            .enumerate()
-            .find_map(|(n, user)| if user.name() == name { Some(n) } else { None })
-    }
-
-    pub fn change_current_if_found(&mut self, name: &String) -> bool {
-        if let Some(index) = self.find(name) {
-            self.current = index;
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn current_user(&self) -> &User {
-        &self.list[self.current]
-    }
-
-    pub fn current_user_mut(&mut self) -> &mut User {
-        &mut self.list[self.current]
-    }
-}
-
 /// Manages all users.
 pub struct UserManager {
     path: PathBuf,
-    database: PathDatabase<Users, Pot>,
-    users: Users,
+    current: usize,
+    users: Vec<User>,
 }
 
 impl UserManager {
@@ -106,26 +31,29 @@ impl UserManager {
         let mut perm = fs::metadata(path).context(IoSnafu)?.permissions();
         perm.set_mode(0o777);
         fs::set_permissions(path, perm).context(IoSnafu)?;
+        unix::fs::chown(&path, Some(0), Some(0)).context(IoSnafu)?;
 
-        let db_path = path.join(USERS_DB);
-        let database = PathDatabase::create_at_path(db_path.clone(), Users::init(&path)?).context(
-            RustbreakSnafu {
-                message: format!("at {USERS_DB}"),
-            },
-        )?;
+        debug!("User manager path created at {path:?}");
 
-        let mut perm = fs::metadata(&db_path).context(IoSnafu)?.permissions();
-        perm.set_mode(0o666);
-        fs::set_permissions(db_path, perm).context(IoSnafu)?;
+        let current = 0;
+        let mut list = Vec::new();
 
-        let users = database.get_data(false).context(RustbreakSnafu {
-            message: "could not load user data".to_owned(),
-        })?;
+        let name = users::get_current_username()
+            .ok_or(UserError::UsernameNotFound)?
+            .into_string()
+            .map_err(|_| UserError::Whatever {
+                message: "OsString conversion error".to_owned(),
+            })?;
+
+        let user = User::init(path.join(&name), name)?;
+        list.push(user);
+
+        debug!("Current user added to user manager");
 
         Ok(Self {
             path: path.to_owned(),
-            database,
-            users,
+            users: list,
+            current,
         })
     }
 
@@ -138,49 +66,58 @@ impl UserManager {
             });
         }
 
-        let database: Database<Users, _, _> = PathDatabase::load_from_path(path.join(USERS_DB))
-            .context(RustbreakSnafu {
-                message: format!("at {USERS_DB}"),
-            })?;
+        let mut users = Vec::new();
 
-        let users = {
-            let mut users = database.get_data(false).context(RustbreakSnafu {
-                message: "could not load user data".to_owned(),
-            })?;
+        for entry in path.read_dir().context(IoSnafu)? {
+            let entry = entry.context(IoSnafu)?;
+            let user = User::open(entry.path())?;
+            users.push(user);
+        }
+
+        let current = {
             let current_name = users::get_current_username()
                 .ok_or(UserError::UsernameNotFound)?
                 .into_string()
                 .map_err(|_| UserError::Whatever {
                     message: "OsString conversion error".to_owned(),
                 })?;
-            if users.current_user().name() != &current_name
-                && !users.change_current_if_found(&current_name)
+
+            if let Some((n, _user)) = users
+                .iter()
+                .enumerate()
+                .find(|(_n, user)| user.name() == &current_name)
             {
-                users.insert(current_name, path)?;
-                database.put_data(users, true).context(RustbreakSnafu {
-                    message: "Put user data error".to_owned(),
-                })?;
-                database.get_data(true).context(RustbreakSnafu {
-                    message: "Get user data error".to_owned(),
-                })?
+                n
             } else {
-                users
+                let path = path.join(&current_name);
+                let user = User::init(path, current_name)?;
+                let current = users.len();
+                users.push(user);
+                current
             }
         };
 
         Ok(Self {
             path: path.to_owned(),
-            database,
+            current,
             users,
         })
     }
 
+    fn current_user(&self) -> &User {
+        &self.users[self.current]
+    }
+
+    fn current_user_mut(&mut self) -> &mut User {
+        &mut self.users[self.current]
+    }
+
     fn current_generation_manager(&self) -> &GenerationManager {
-        self.users.current_user().generation_manager()
+        self.current_user().generation_manager()
     }
 
     fn current_generation_manager_mut(&mut self) -> &mut GenerationManager {
-        self.users.current_user_mut().generation_manager_mut()
+        self.current_user_mut().generation_manager_mut()
     }
 
     /// Inserts a requiremnt into the current user.
@@ -268,7 +205,6 @@ impl UserManager {
 
     pub fn packages(&self) -> impl Iterator<Item = &PackageId> {
         self.users
-            .list
             .iter()
             .map(|user| user.generation_manager().packages())
             .flatten()
@@ -288,11 +224,9 @@ impl UserManager {
 
     /// Flushes all data to the backend
     pub fn flush(self) -> UserResult<()> {
-        self.database
-            .put_data(self.users, true)
-            .context(RustbreakSnafu {
-                message: "could not flush user data".to_owned(),
-            })?;
+        for user in self.users {
+            user.flush()?;
+        }
         Ok(())
     }
 }
@@ -300,7 +234,6 @@ impl UserManager {
 #[cfg(test)]
 mod tests {
     use super::UserManager;
-    use super::USERS_DB;
     use crate::extra::path::ComponentPathBuf;
     use crate::user::UserError;
     use crate::{store::LocalStore, support::*};
@@ -308,18 +241,18 @@ mod tests {
     use std::fs;
     use temp_dir::TempDir;
 
-    #[test]
-    fn user_manager_create_at_path() {
-        let temp_dir = TempDir::new().unwrap();
-        let path = temp_dir.child("user");
+    // #[test]
+    // fn user_manager_create_at_path() {
+    //     let temp_dir = TempDir::new().unwrap();
+    //     let path = temp_dir.child("user");
 
-        let _user_manager = UserManager::init(&path).unwrap();
+    //     let _user_manager = UserManager::init(&path).unwrap();
 
-        let db = path.join(USERS_DB);
+    //     let db = path.join(USERS_DB);
 
-        assert!(db.exists());
-        assert!(db.is_file());
-    }
+    //     assert!(db.exists());
+    //     assert!(db.is_file());
+    // }
 
     #[test]
     fn user_manager_open_ok() {
@@ -503,7 +436,7 @@ mod tests {
         fs::create_dir(&global_path).unwrap();
 
         let global_paths = ComponentPathBuf::from_path(global_path);
-        global_paths.create_dirs().unwrap();
+        global_paths.create_dirs(true).unwrap();
 
         user_manager.switch_global_links(&global_paths).unwrap();
 

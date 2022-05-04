@@ -2,6 +2,7 @@ use relative_path::RelativePathBuf;
 use serde::{Deserialize, Serialize};
 use std::{
     fs, io,
+    os::unix,
     path::{Path, PathBuf},
 };
 
@@ -37,6 +38,15 @@ impl ComponentPathBuf {
         }
     }
 
+    pub fn global() -> Self {
+        Self {
+            binary: "/usr/bin".into(),
+            config: "/etc".into(),
+            library: "/usr/lib".into(),
+            share: "/usr/share".into(),
+        }
+    }
+
     pub fn new<T, U, V, W>(binary: T, config: U, library: V, share: W) -> Self
     where
         T: AsRef<Path>,
@@ -52,19 +62,32 @@ impl ComponentPathBuf {
         }
     }
 
-    pub fn create_dirs(&self) -> io::Result<()> {
+    pub fn create_dirs(&self, chown: bool) -> io::Result<()> {
         if !self.binary.exists() {
             fs::create_dir(&self.binary)?;
+            if chown {
+                unix::fs::chown(&self.binary, Some(0), Some(0))?;
+            }
         }
         if !self.config.exists() {
             fs::create_dir(&self.config)?;
+            if chown {
+                unix::fs::chown(&self.config, Some(0), Some(0))?;
+            }
         }
         if !self.library.exists() {
             fs::create_dir(&self.library)?;
+            if chown {
+                unix::fs::chown(&self.library, Some(0), Some(0))?;
+            }
         }
         if !self.share.exists() {
             fs::create_dir(&self.share)?;
+            if chown {
+                unix::fs::chown(&self.share, Some(0), Some(0))?;
+            }
         }
+
         Ok(())
     }
 }

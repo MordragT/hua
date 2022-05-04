@@ -45,10 +45,7 @@ impl PackageHash {
         let mut tree = MerkleTree::<Blake3>::new();
         let mut dir_children: Vec<RawId> = Vec::new();
 
-        let root_path = path
-            .as_ref()
-            .canonicalize()
-            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+        let root_path = path.as_ref().canonicalize()?;
 
         for entry in WalkDir::new(&root_path).contents_first(true) {
             let entry = entry?;

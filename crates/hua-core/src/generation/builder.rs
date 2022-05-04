@@ -39,18 +39,18 @@ impl GenerationBuilder {
     }
 
     pub fn resolve<S, B: ReadBackend>(mut self, store: &Store<S, B>) -> GenerationResult<Self> {
-        if let Some(reqs) = &self.requirements {
-            let mut graph = DependencyGraph::new();
-            let packages = graph
-                .resolve(reqs, store)
-                .context(DependencySnafu { id: self.id })?
-                .collect();
+        let reqs = self
+            .requirements
+            .as_ref()
+            .ok_or(GenerationError::MissingRequirements { id: self.id })?;
+        let mut graph = DependencyGraph::new();
+        let packages = graph
+            .resolve(reqs, store)
+            .context(DependencySnafu { id: self.id })?
+            .collect();
 
-            self.packages = Some(packages);
-            Ok(self)
-        } else {
-            Err(GenerationError::MissingRequirements { id: self.id })
-        }
+        self.packages = Some(packages);
+        Ok(self)
     }
 
     pub fn build<B: ReadBackend<Source = PathBuf>>(
@@ -81,7 +81,7 @@ impl GenerationBuilder {
             path.join("share"),
         );
         component_paths
-            .create_dirs()
+            .create_dirs(false)
             .context(GenerationIoSnafu { id: self.id })?;
 
         store
@@ -113,7 +113,7 @@ impl GenerationBuilder {
             path.join("share"),
         );
         component_paths
-            .create_dirs()
+            .create_dirs(false)
             .context(GenerationIoSnafu { id: self.id })?;
 
         Ok(Generation::new(

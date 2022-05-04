@@ -26,6 +26,7 @@ pub struct GenerationManager {
 impl GenerationManager {
     pub fn init<P: AsRef<Path>>(path: P) -> GenerationResult<Self> {
         let path = path.as_ref().to_owned();
+        fs::create_dir(&path).context(IoSnafu)?;
 
         let current = 0;
         let mut list = HashMap::new();

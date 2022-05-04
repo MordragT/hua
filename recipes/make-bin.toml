@@ -9,4 +9,4 @@ requires = []
 requires_build = []
 target_dir = "usr"
 vars = []
-script = "echo Binary Package -> Nothing todo"
+script = "echo Binary Package Nothing todo"

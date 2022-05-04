@@ -2,10 +2,15 @@ use super::{object::Objects, package::Packages, *};
 use crate::extra::persist::Pot;
 use rustbreak::PathDatabase;
 use snafu::ResultExt;
-use std::{fs, os::unix::prelude::PermissionsExt, path::PathBuf};
+use std::{
+    fs,
+    os::unix::{self, prelude::PermissionsExt},
+    path::PathBuf,
+};
 
 #[derive(Debug)]
 pub struct LocalBackend {
+    path: PathBuf,
     db: PathDatabase<(Objects, Packages), Pot>,
     objects: Objects,
     packages: Packages,
@@ -15,11 +20,11 @@ impl ReadBackend for LocalBackend {
     type Source = PathBuf;
 
     fn open(path: PathBuf) -> StoreResult<Self> {
-        let db = PathDatabase::load_from_path(path).context(RustbreakLoadSnafu)?;
-
+        let db = PathDatabase::load_from_path(path.clone()).context(RustbreakLoadSnafu)?;
         let (objects, packages) = db.get_data(false).context(RustbreakLoadDataSnafu)?;
 
         Ok(Self {
+            path,
             db,
             objects,
             packages,
@@ -44,9 +49,11 @@ impl WriteBackend for LocalBackend {
 
         let mut perm = fs::metadata(&path).context(IoSnafu)?.permissions();
         perm.set_mode(0o644);
-        fs::set_permissions(path, perm).context(IoSnafu)?;
+        fs::set_permissions(&path, perm).context(IoSnafu)?;
+        unix::fs::chown(&path, Some(0), Some(0)).context(IoSnafu)?;
 
         Ok(Self {
+            path,
             db,
             objects: Objects::new(),
             packages: Packages::new(),
@@ -65,6 +72,8 @@ impl WriteBackend for LocalBackend {
         self.db
             .put_data((self.objects, self.packages), true)
             .context(RustbreakSaveDataSnafu)?;
+        unix::fs::chown(self.path, Some(0), Some(0)).context(IoSnafu)?;
+
         Ok(())
     }
 }

@@ -58,6 +58,7 @@
         # llvmPkgs.llvm.dev
         # lldb
         zig
+        just
 
         # linux-pam
         # (pkgs.writeShellScriptBin "roc" ''

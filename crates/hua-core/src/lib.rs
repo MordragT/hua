@@ -3,6 +3,7 @@
 #![feature(assert_matches)]
 #![feature(explicit_generic_args_with_impl_trait)]
 #![feature(c_size_t)]
+#![feature(unix_chown)]
 
 pub mod c_ffi;
 pub mod dependency;
@@ -31,6 +32,7 @@ pub mod config {
     use std::{
         error::Error,
         fs,
+        os::unix,
         path::{Path, PathBuf},
     };
 
@@ -51,6 +53,8 @@ pub mod config {
             };
             let bytes = toml::to_vec(&config)?;
             fs::write(&config.path, bytes)?;
+            unix::fs::chown(&config.path, Some(0), Some(0))?;
+
             Ok(config)
         }
 
@@ -72,6 +76,7 @@ pub mod config {
             let bytes = toml::to_vec(&self)?;
             fs::remove_file(&self.path)?;
             fs::write(&self.path, bytes)?;
+            unix::fs::chown(&self.path, Some(0), Some(0))?;
             Ok(())
         }
 

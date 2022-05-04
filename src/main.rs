@@ -1,5 +1,7 @@
 #![feature(let_chains)]
+#![feature(unix_chown)]
 
+use caps::{CapSet, Capability};
 use clap::{arg, Command};
 use console::style;
 use dialoguer::{Confirm, Select};
@@ -18,12 +20,12 @@ use hua_core::{
     url::Url,
     user::UserManager,
 };
-use std::{error::Error, fs, path::PathBuf};
+use std::{error::Error, fs, path::PathBuf, os::unix};
+use log::{debug, info};
 
 const HUA_PATH: &str = "/hua";
 const CONFIG_PATH: &str = "/hua/config.toml";
 const USER_MANAGER_PATH: &str = "/hua/user";
-const GLOBAL_PATH: &str = "/usr";
 const REMOTE_TMP: &str = "/tmp/remote";
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -79,27 +81,55 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     match matches.subcommand() {
         Some(("init", _)) => {
+            if caps::has_cap(None, CapSet::Permitted, Capability::CAP_CHOWN)?
+                && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_OVERRIDE)?
+                && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_READ_SEARCH)?
+            {
+                caps::raise(None, CapSet::Effective, Capability::CAP_CHOWN)?;
+                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_OVERRIDE)?;
+                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
+            } else {
+                return Err("Please run hua init as root or with the appropiate capabilities".into());
+            }
+
             let path = PathBuf::from(HUA_PATH);
             if !path.exists() {
-                fs::create_dir(HUA_PATH)?;
+                fs::create_dir(&path)?;
+                unix::fs::chown(path, Some(0), Some(0))?;
             }
+            debug!("{HUA_PATH} created");
 
-            let path = PathBuf::from(GLOBAL_PATH);
-            if !path.exists() {
-                fs::create_dir(path)?;
-            }
+            // let path = PathBuf::from(GLOBAL_PATH);
+            // if !path.exists() {
+            //     fs::create_dir(&path)?;
+            //     unix::fs::chown(path, Some(0), Some(0))?;
+            // }
+            // debug!("{GLOBAL_PATH} created");
 
-            let global_paths = ComponentPathBuf::from_path(GLOBAL_PATH);
-            global_paths.create_dirs()?;
+            let global_paths = ComponentPathBuf::global();
+            global_paths.create_dirs(true)?;
+            debug!("Global component paths created");
 
             let _store = LocalStore::init(STORE_PATH)?;
+            info!("Local store in {STORE_PATH} initialised");
+
             let _user_manager = UserManager::init(USER_MANAGER_PATH)?;
+            info!("User manager in {USER_MANAGER_PATH} initialised");
+
             let _config = Config::init(CONFIG_PATH, Vec::new())?;
+            info!("Config in {CONFIG_PATH} initialised");
 
             println!("Files and folders created");
         }
         Some(("store", sub_matches)) => match sub_matches.subcommand() {
             Some(("search", sub_matches)) => {
+                if caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_READ_SEARCH)?
+            {
+                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
+            } else {
+                return Err("Please run hua init as root or with the appropiate capabilities".into());
+            }
+
                 let name = sub_matches
                     .value_of("NAME")
                     .expect("When searching the store a package name has to be given.");
@@ -109,12 +139,35 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
             Some(("collect-garbage", _)) => {
+                if caps::has_cap(None, CapSet::Permitted, Capability::CAP_CHOWN)?
+                && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_OVERRIDE)?
+                && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_READ_SEARCH)?
+            {
+                caps::raise(None, CapSet::Effective, Capability::CAP_CHOWN)?;
+                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_OVERRIDE)?;
+                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
+            } else {
+                return Err("Please run hua init as root or with the appropiate capabilities".into());
+            }
+    
                 let mut store = LocalStore::open(STORE_PATH)?;
                 let user_manager = UserManager::open(USER_MANAGER_PATH)?;
+
                 let _removed = store.remove_unused(&user_manager)?;
                 store.flush()?;
             }
             Some(("add", sub_matches)) => {
+                if caps::has_cap(None, CapSet::Permitted, Capability::CAP_CHOWN)?
+                && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_OVERRIDE)?
+                && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_READ_SEARCH)?
+            {
+                caps::raise(None, CapSet::Effective, Capability::CAP_CHOWN)?;
+                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_OVERRIDE)?;
+                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
+            } else {
+                return Err("Please run hua init as root or with the appropiate capabilities".into());
+            }
+
                 let lock_file = sub_matches
                     .value_of("LOCK_FILE")
                     .expect("A lock file has to be provided when adding a package to the store");
@@ -134,7 +187,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let lock_data = fs::read(lock_file)?;
                 let package = toml::from_slice::<Package>(&lock_data)?;
 
+                info!("Package lock and content read");
+
                 let mut store = LocalStore::open(STORE_PATH)?;
+
+                info!("Local store opened");
 
                 println!("Package to add:\n{}", &package.desc);
                 if Confirm::new().with_prompt("Continue?").interact()? {
@@ -151,10 +208,26 @@ fn main() -> Result<(), Box<dyn Error>> {
         },
         Some(("generations", sub_matches)) => match sub_matches.subcommand() {
             Some(("list", _)) => {
+                if caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_READ_SEARCH)?
+            {
+                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
+            } else {
+                return Err("Please run hua init as root or with the appropiate capabilities".into());
+            }
+
                 let user_manager = UserManager::open(USER_MANAGER_PATH)?;
                 user_manager.list_current_generations();
             }
             Some(("remove", sub_matches)) => {
+                if caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_OVERRIDE)?
+                && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_READ_SEARCH)?
+            {
+                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_OVERRIDE)?;
+                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
+            } else {
+                return Err("Please run hua init as root or with the appropiate capabilities".into());
+            }
+
                 let id = sub_matches
                     .value_of("ID")
                     .expect("When removing a generation, a id has to be given.")
@@ -168,6 +241,17 @@ fn main() -> Result<(), Box<dyn Error>> {
             _ => unreachable!(),
         },
         Some(("add", sub_matches)) => {
+            if caps::has_cap(None, CapSet::Permitted, Capability::CAP_CHOWN)?
+            && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_OVERRIDE)?
+            && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_READ_SEARCH)?
+        {
+            caps::raise(None, CapSet::Effective, Capability::CAP_CHOWN)?;
+            caps::raise(None, CapSet::Effective, Capability::CAP_DAC_OVERRIDE)?;
+            caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
+        } else {
+            return Err("Please run hua init as root or with the appropiate capabilities".into());
+        }
+
             // TODO should give a selection of packages found in the local store or remote caches and let the user decide
 
             let name = sub_matches
@@ -179,16 +263,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             let config = Config::open(CONFIG_PATH)?;
             let locator = Locator::new(config.to_caches().into_iter())?;
 
-            // let (names, packages): (Vec<_>, Vec<_>) = store
-            //     .packages()
-            //     .filter_by_name_containing(name)
-            //     .map(|(id, desc, objects)| {
-            //         (
-            //             format!("{} {}", style(&desc.name).green(), desc.version),
-            //             (id, desc, objects),
-            //         )
-            //     })
-            //     .unzip();
             let (mut names, mut packages): (Vec<_>, Vec<_>) = locator
                 .filter_by_name_containing(name, &store)
                 .map(|(id, desc, source)| {
@@ -249,7 +323,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 user_manager.insert_requirement(req, &store)?;
 
-                let global_paths = ComponentPathBuf::from_path(GLOBAL_PATH);
+                let global_paths = ComponentPathBuf::global();
                 user_manager.switch_global_links(&global_paths)?;
 
                 user_manager.flush()?;
@@ -260,6 +334,15 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         }
         Some(("remove", sub_matches)) => {
+            if caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_OVERRIDE)?
+            && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_READ_SEARCH)?
+        {
+            caps::raise(None, CapSet::Effective, Capability::CAP_DAC_OVERRIDE)?;
+            caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
+        } else {
+            return Err("Please run hua init as root or with the appropiate capabilities".into());
+        }
+
             let name = sub_matches
                 .value_of("NAME")
                 .expect("When removing a package, a name has to be provided");
@@ -288,7 +371,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 user_manager.remove_requirement(&req, &store)?;
 
-                let global_paths = ComponentPathBuf::from_path(GLOBAL_PATH);
+                let global_paths = ComponentPathBuf::global();
                 user_manager.switch_global_links(&global_paths)?;
 
                 user_manager.flush()?;
@@ -298,6 +381,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         }
         Some(("build", sub_matches)) => {
+            if caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_READ_SEARCH)?
+            {
+                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
+            } else {
+                return Err("Please run hua init as root or with the appropiate capabilities".into());
+            }
+
             let path = sub_matches
                 .value_of("PATH")
                 .expect("A recipe has to be provided.");
@@ -312,6 +402,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             println!("{} {path:#?}\n{package}", style("Success").green());
         }
         Some(("shell", sub_matches)) => {
+            if caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_READ_SEARCH)?
+            {
+                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
+            } else {
+                return Err("Please run hua init as root or with the appropiate capabilities".into());
+            }
+
             let names = sub_matches
                 .values_of("NAME")
                 .expect("When creating a shell, package names must be provided.");
@@ -331,6 +428,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         Some(("cache", sub_matches)) => match sub_matches.subcommand() {
             Some(("add", sub_matches)) => {
+                if caps::has_cap(None, CapSet::Permitted, Capability::CAP_CHOWN)?
+                && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_OVERRIDE)?
+                && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_READ_SEARCH)?
+            {
+                caps::raise(None, CapSet::Effective, Capability::CAP_CHOWN)?;
+                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_OVERRIDE)?;
+                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
+            } else {
+                return Err("Please run hua init as root or with the appropiate capabilities".into());
+            }
+
                 let url = sub_matches
                     .value_of("URL")
                     .expect("When adding a cache a url has to be provided");
@@ -343,7 +451,23 @@ fn main() -> Result<(), Box<dyn Error>> {
                 println!("{} {url} added", style("Success").green());
             }
             Some(("remove", _)) => {
+                if caps::has_cap(None, CapSet::Permitted, Capability::CAP_CHOWN)?
+                && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_OVERRIDE)?
+                && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_READ_SEARCH)?
+            {
+                caps::raise(None, CapSet::Effective, Capability::CAP_CHOWN)?;
+                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_OVERRIDE)?;
+                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
+            } else {
+                return Err("Please run hua init as root or with the appropiate capabilities".into());
+            }
+
                 let mut config = Config::open(CONFIG_PATH)?;
+
+                if config.caches().len() == 0 {
+                    println!("Nothing to remove");
+                    return Ok(());
+                }
 
                 let selection = Select::new()
                     .with_prompt("Wich cache to remove (cancel with ESC or q)?")
