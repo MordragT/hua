@@ -8,6 +8,7 @@ use crate::{
     dependency::Requirement,
     extra::{path::ComponentPathBuf, style::ProgressBar},
     user::UserManager,
+    GID, UID,
 };
 use log::{info, warn};
 use std::{
@@ -146,7 +147,7 @@ impl<B: WriteBackend<Source = PathBuf>> Store<PathBuf, B> {
     pub fn init<P: AsRef<Path>>(path: P) -> StoreResult<Self> {
         let path = path.as_ref().to_owned();
         fs::create_dir(&path).context(IoSnafu)?;
-        unix::fs::chown(&path, Some(0), Some(0)).context(IoSnafu)?;
+        unix::fs::chown(&path, UID, GID).context(IoSnafu)?;
 
         let backend = B::init(path.join(PACKAGES_DB))?;
 
@@ -262,7 +263,7 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
 
         let path_in_store = package.path_in_store(&self.source);
         fs::create_dir(&path_in_store).context(IoSnafu)?;
-        unix::fs::chown(&path_in_store, Some(0), Some(0)).context(IoSnafu)?;
+        unix::fs::chown(&path_in_store, UID, GID).context(IoSnafu)?;
 
         info!("Created {path_in_store:?}");
 
@@ -288,7 +289,7 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
             for (tree, id) in trees {
                 let dest = tree.to_path(&path_in_store);
                 fs::create_dir(&dest).context(CreateTreeSnafu { path: dest.clone() })?;
-                unix::fs::chown(&dest, Some(0), Some(0)).context(IoSnafu)?;
+                unix::fs::chown(&dest, UID, GID).context(IoSnafu)?;
                 object_ids.insert(id);
 
                 if !self.objects().contains(&id) {
@@ -333,7 +334,7 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
                         src: source,
                         dest: dest.clone(),
                     })?;
-                    unix::fs::chown(&dest, Some(0), Some(0)).context(IoSnafu)?;
+                    unix::fs::chown(&dest, UID, GID).context(IoSnafu)?;
 
                     let old = self.objects_mut().insert(id, blob.into());
                     assert!(old.is_none());

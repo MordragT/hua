@@ -4,6 +4,7 @@ use crate::{
     generation::GenerationManager,
     store::{backend::ReadBackend, id::PackageId, Store},
     user::User,
+    GID, UID,
 };
 use log::debug;
 use snafu::ResultExt;
@@ -31,7 +32,7 @@ impl UserManager {
         let mut perm = fs::metadata(path).context(IoSnafu)?.permissions();
         perm.set_mode(0o777);
         fs::set_permissions(path, perm).context(IoSnafu)?;
-        unix::fs::chown(&path, Some(0), Some(0)).context(IoSnafu)?;
+        unix::fs::chown(&path, UID, GID).context(IoSnafu)?;
 
         debug!("User manager path created at {path:?}");
 

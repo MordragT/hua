@@ -6,6 +6,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::{GID, UID};
+
 pub fn relative_path_between<P: AsRef<Path>, Q: AsRef<Path>>(
     root: P,
     path: Q,
@@ -66,25 +68,25 @@ impl ComponentPathBuf {
         if !self.binary.exists() {
             fs::create_dir(&self.binary)?;
             if chown {
-                unix::fs::chown(&self.binary, Some(0), Some(0))?;
+                unix::fs::chown(&self.binary, UID, GID)?;
             }
         }
         if !self.config.exists() {
             fs::create_dir(&self.config)?;
             if chown {
-                unix::fs::chown(&self.config, Some(0), Some(0))?;
+                unix::fs::chown(&self.config, UID, GID)?;
             }
         }
         if !self.library.exists() {
             fs::create_dir(&self.library)?;
             if chown {
-                unix::fs::chown(&self.library, Some(0), Some(0))?;
+                unix::fs::chown(&self.library, UID, GID)?;
             }
         }
         if !self.share.exists() {
             fs::create_dir(&self.share)?;
             if chown {
-                unix::fs::chown(&self.share, Some(0), Some(0))?;
+                unix::fs::chown(&self.share, UID, GID)?;
             }
         }
 

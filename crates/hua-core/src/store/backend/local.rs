@@ -1,5 +1,5 @@
 use super::{object::Objects, package::Packages, *};
-use crate::extra::persist::Pot;
+use crate::{extra::persist::Pot, GID, UID};
 use rustbreak::PathDatabase;
 use snafu::ResultExt;
 use std::{
@@ -50,7 +50,7 @@ impl WriteBackend for LocalBackend {
         let mut perm = fs::metadata(&path).context(IoSnafu)?.permissions();
         perm.set_mode(0o644);
         fs::set_permissions(&path, perm).context(IoSnafu)?;
-        unix::fs::chown(&path, Some(0), Some(0)).context(IoSnafu)?;
+        unix::fs::chown(&path, UID, GID).context(IoSnafu)?;
 
         Ok(Self {
             path,
@@ -72,7 +72,7 @@ impl WriteBackend for LocalBackend {
         self.db
             .put_data((self.objects, self.packages), true)
             .context(RustbreakSaveDataSnafu)?;
-        unix::fs::chown(self.path, Some(0), Some(0)).context(IoSnafu)?;
+        unix::fs::chown(self.path, UID, GID).context(IoSnafu)?;
 
         Ok(())
     }

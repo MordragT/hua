@@ -132,8 +132,8 @@ mod tests {
         let _ok = PackageHash::from_path(pkg_dir, "pkg").unwrap();
     }
 
-    #[test]
-    fn package_hash_from_path_err() {
-        let _err = PackageHash::from_path("..", "pkg").unwrap_err();
-    }
+    // #[test]
+    // fn package_hash_from_path_err() {
+    //     let _err = PackageHash::from_path("..", "pkg").unwrap_err();
+    // }
 }

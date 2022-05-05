@@ -18,7 +18,7 @@ use hua_core::{
         LocalStore, STORE_PATH,
     },
     url::Url,
-    user::UserManager,
+    user::UserManager, UID, GID,
 };
 use std::{error::Error, fs, path::PathBuf, os::unix};
 use log::{debug, info};
@@ -95,14 +95,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             let path = PathBuf::from(HUA_PATH);
             if !path.exists() {
                 fs::create_dir(&path)?;
-                unix::fs::chown(path, Some(0), Some(0))?;
+                unix::fs::chown(path, UID, GID)?;
             }
             debug!("{HUA_PATH} created");
 
             // let path = PathBuf::from(GLOBAL_PATH);
             // if !path.exists() {
             //     fs::create_dir(&path)?;
-            //     unix::fs::chown(path, Some(0), Some(0))?;
+            //     unix::fs::chown(path, UID, GID)?;
             // }
             // debug!("{GLOBAL_PATH} created");
 

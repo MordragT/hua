@@ -16,6 +16,16 @@ pub mod store;
 mod support;
 pub mod user;
 
+#[cfg(not(test))]
+pub const UID: Option<u32> = Some(0);
+#[cfg(test)]
+pub const UID: Option<u32> = None;
+
+#[cfg(not(test))]
+pub const GID: Option<u32> = Some(0);
+#[cfg(test)]
+pub const GID: Option<u32> = None;
+
 pub mod cache {
     pub use cached_path::{Cache, CacheBuilder, Options};
 }
@@ -39,6 +49,8 @@ pub mod config {
     use serde::{Deserialize, Serialize};
     use url::Url;
 
+    use crate::{GID, UID};
+
     #[derive(Debug, Deserialize, Serialize, Clone, Default)]
     pub struct Config {
         path: PathBuf,
@@ -53,7 +65,7 @@ pub mod config {
             };
             let bytes = toml::to_vec(&config)?;
             fs::write(&config.path, bytes)?;
-            unix::fs::chown(&config.path, Some(0), Some(0))?;
+            unix::fs::chown(&config.path, UID, GID)?;
 
             Ok(config)
         }
@@ -76,7 +88,7 @@ pub mod config {
             let bytes = toml::to_vec(&self)?;
             fs::remove_file(&self.path)?;
             fs::write(&self.path, bytes)?;
-            unix::fs::chown(&self.path, Some(0), Some(0))?;
+            unix::fs::chown(&self.path, UID, GID)?;
             Ok(())
         }
 

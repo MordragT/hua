@@ -86,22 +86,26 @@ impl User {
 
 #[cfg(test)]
 mod tests {
-    use super::User;
+    use super::{User, USER_DB};
     use temp_dir::TempDir;
 
     #[test]
-    fn user_create_under() {
+    fn user_init() {
         let temp_dir = TempDir::new().unwrap();
+        let user_dir = temp_dir.child("example");
 
-        let _user = User::init(temp_dir.path(), "example".to_owned()).unwrap();
-        let name = users::get_current_username()
-            .unwrap()
-            .into_string()
-            .unwrap();
+        let _user = User::init(&user_dir, "example".to_owned()).unwrap();
 
-        let user_dir = temp_dir.child(name);
+        let user_db = user_dir.join(USER_DB);
+        let generations_dir = user_dir.join("generations");
 
         assert!(user_dir.exists());
         assert!(user_dir.is_dir());
+
+        assert!(user_db.exists());
+        assert!(user_db.is_file());
+
+        assert!(generations_dir.exists());
+        assert!(generations_dir.is_dir());
     }
 }
