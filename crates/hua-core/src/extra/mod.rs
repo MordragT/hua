@@ -1,10 +1,16 @@
 use semver::{Comparator, Op, Version, VersionReq};
 
+/// Filesystem manipulation operations.
 pub mod fs;
+/// Hashing operations.
 pub mod hash;
+/// Memory operations.
 pub mod mem;
+/// Path manipulation.
 pub mod path;
+/// [serde] persistation.
 pub mod persist;
+/// Styling.
 pub mod style;
 
 // pub struct Remote<T> {
@@ -24,6 +30,21 @@ pub mod style;
 //     Http { url: Url, checksum: u64 },
 // }
 
+/// Returns the exact [VersionReq] of a [Version].
+///
+/// # Example
+///
+/// ```
+/// use semver::{Version, VersionReq};
+/// use hua_core::extra;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let version = Version::new(0, 1, 1);
+/// let req = extra::exact_version_req(version);
+///
+/// assert_eq!(req, VersionReq::parse("=0.1.1")?);
+/// # Ok(())
+/// # }
 pub fn exact_version_req(v: Version) -> VersionReq {
     VersionReq {
         comparators: vec![Comparator {
@@ -36,7 +57,21 @@ pub fn exact_version_req(v: Version) -> VersionReq {
     }
 }
 
+/// Unicode string slice operations.
 pub mod str {
+
+    /// Parses a [str] of hexadecimal numbers into a [Vec<u8>]
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use hua_core::extra::str;
+    /// # fn main() {
+    /// let hex_asm = "a2b0";
+    /// let vec = str::parse_hex(hex_asm);
+    ///
+    /// assert_eq!(vec, vec![162, 176]);
+    /// # }
     pub fn parse_hex(hex_asm: &str) -> Vec<u8> {
         let mut hex_bytes = hex_asm
             .as_bytes()

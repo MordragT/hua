@@ -8,7 +8,10 @@ mod builder;
 mod generation;
 mod manager;
 
-use crate::{dependency::DependencyError, store::StoreError};
+use crate::{
+    dependency::{DependencyError, Requirement},
+    store::StoreError,
+};
 
 #[derive(Debug, Snafu)]
 pub enum GenerationError {
@@ -26,6 +29,8 @@ pub enum GenerationError {
     NotFound { id: usize },
     #[snafu(display("The generation {id} is currently in use"))]
     InUse { id: usize },
+    #[snafu(display("Graph not resolvable: {unresolved:?}"))]
+    GraphNotResolvable { unresolved: Vec<Requirement> },
     #[snafu(display("IO Error for generation {id}: {source}"))]
     GenerationIoError { id: usize, source: std::io::Error },
     #[snafu(display("IO Error: {source}"))]

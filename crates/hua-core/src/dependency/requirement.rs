@@ -7,6 +7,23 @@ use semver::VersionReq;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fmt, fmt::Debug, hash::Hash};
 
+/// A Requirement to be resolved by the [super::DependencyGraph].
+///
+/// # Example
+///
+/// ```
+/// use std::collections::BTreeSet;
+/// use semver::VersionReq;
+/// use hua_core::dependency::Requirement;
+/// use hua_core::store::object::Blob;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let mut objects = BTreeSet::new();
+/// objects.insert(Blob::new("bin/bash".into()));
+///
+/// let requirement = Requirement::new("name".to_owned(), VersionReq::parse(">0.0.1")?, objects);
+/// # Ok(())
+/// # }
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
 pub struct Requirement {
     name: String,
@@ -15,6 +32,7 @@ pub struct Requirement {
 }
 
 impl Requirement {
+    /// Creates a new [Requirement].
     pub fn new(name: String, version_req: VersionReq, objects: BTreeSet<Blob>) -> Self {
         Self {
             name,
@@ -23,12 +41,17 @@ impl Requirement {
         }
     }
 
+    /// Returns the name of the [Requirement].
     pub fn name(&self) -> &String {
         &self.name
     }
+
+    /// Returns the [VersionReq] of the [Requirement].
     pub fn version_req(&self) -> &VersionReq {
         &self.version_req
     }
+
+    /// Returns all the [Blob] of the [Requirement].
     pub fn blobs(&self) -> &BTreeSet<Blob> {
         &self.blobs
     }

@@ -8,6 +8,23 @@ use std::{
 
 use crate::{GID, UID};
 
+/// Calculates the [RelativePathBuf] between two [Path].
+///
+/// # Example
+///
+/// ```no_run
+/// use hua_core::extra::path;
+/// use relative_path::RelativePathBuf;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let root = "/a/b/c/d";
+/// let path = "c/d/e/f";
+///
+/// let relative = path::relative_path_between(root, path)?;
+///
+/// assert_eq!(relative, RelativePathBuf::from("e/f"));
+/// # Ok(())
+/// # }
 pub fn relative_path_between<P: AsRef<Path>, Q: AsRef<Path>>(
     root: P,
     path: Q,

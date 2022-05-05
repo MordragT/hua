@@ -163,9 +163,15 @@ impl GenerationManager {
         }
     }
 
-    pub fn switch_to(&mut self, id: usize) -> GenerationResult<()> {
+    pub fn switch_to(
+        &mut self,
+        id: usize,
+        global_paths: &ComponentPathBuf,
+    ) -> GenerationResult<()> {
         if self.generations.contains_key(&id) {
             self.current = id;
+
+            self.switch_global_links(global_paths)?;
 
             Ok(())
         } else {

@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 #![feature(let_chains)]
 #![feature(slice_pattern)]
 #![feature(assert_matches)]

@@ -44,10 +44,16 @@ impl GenerationBuilder {
             .as_ref()
             .ok_or(GenerationError::MissingRequirements { id: self.id })?;
         let mut graph = DependencyGraph::new();
-        let packages = graph
+        graph
             .resolve(reqs, store)
-            .context(DependencySnafu { id: self.id })?
-            .collect();
+            .context(DependencySnafu { id: self.id })?;
+
+        let packages = if graph.is_resolved() {
+            graph.resolved_packages().collect()
+        } else {
+            let unresolved = graph.unresolved_requirements().cloned().collect();
+            return Err(GenerationError::GraphNotResolvable { unresolved });
+        };
 
         self.packages = Some(packages);
         Ok(self)

@@ -2,7 +2,7 @@ use super::{object::Objects, package::Packages, *};
 use std::any::Any;
 
 #[derive(Debug)]
-struct MemoryBackend {
+pub struct MemoryBackend {
     objects: Objects,
     packages: Packages,
 }

@@ -1,5 +1,5 @@
 use super::{
-    backend::{LocalBackend, ReadBackend, RemoteBackend, WriteBackend},
+    backend::{LocalBackend, MemoryBackend, ReadBackend, RemoteBackend, WriteBackend},
     object::{Blob, Objects},
     package::{PackageDesc, Packages},
     *,
@@ -25,6 +25,7 @@ pub const STORE_PATH: &str = "/hua/store/";
 
 pub type LocalStore = Store<PathBuf, LocalBackend>;
 pub type RemoteStore = Store<Url, RemoteBackend>;
+pub type MemoryStore = Store<(), MemoryBackend>;
 
 /// A Store that contains all the packages installed by any user
 /// Content Addressable Store
@@ -37,6 +38,16 @@ pub struct Store<S, B, const BAR: bool = true> {
 impl<B> Store<Url, B> {
     pub fn url(&self) -> &Url {
         &self.source
+    }
+}
+
+impl Store<(), MemoryBackend> {
+    pub fn init() -> StoreResult<Self> {
+        let backend = MemoryBackend::init(Box::new(()))?;
+        Ok(Self {
+            backend,
+            source: (),
+        })
     }
 }
 

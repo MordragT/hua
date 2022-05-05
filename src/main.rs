@@ -53,7 +53,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .about("Remove a specified generation")
                         .arg(arg!(<ID> "The id of the generation to remove"))
                         .arg_required_else_help(true),
-                    Command::new("list").about("List all the generations of the current user")]
+                    Command::new("list").about("List all the generations of the current user"),
+                    Command::new("switch")
+                        .about("Switch to a specific generation")
+                        .arg(arg!(<ID> "The id of the generation to switch to"))
+                        .arg_required_else_help(true)]
                 ),
             Command::new("add")
                 .about("Adds a package to the store and switches to a new generation with the package")
@@ -209,34 +213,57 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some(("generations", sub_matches)) => match sub_matches.subcommand() {
             Some(("list", _)) => {
                 if caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_READ_SEARCH)?
-            {
-                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
-            } else {
-                return Err("Please run hua init as root or with the appropiate capabilities".into());
-            }
+                {
+                    caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
+                } else {
+                    return Err("Please run hua init as root or with the appropiate capabilities".into());
+                }
 
                 let user_manager = UserManager::open(USER_MANAGER_PATH)?;
                 user_manager.list_current_generations();
             }
             Some(("remove", sub_matches)) => {
                 if caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_OVERRIDE)?
-                && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_READ_SEARCH)?
-            {
-                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_OVERRIDE)?;
-                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
-            } else {
-                return Err("Please run hua init as root or with the appropiate capabilities".into());
-            }
+                    && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_READ_SEARCH)?
+                {
+                    caps::raise(None, CapSet::Effective, Capability::CAP_DAC_OVERRIDE)?;
+                    caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
+                } else {
+                    return Err("Please run hua init as root or with the appropiate capabilities".into());
+                }
 
                 let id = sub_matches
                     .value_of("ID")
-                    .expect("When removing a generation, a id has to be given.")
+                    .expect("When removing a generation, an id has to be given.")
                     .parse()?;
                 let mut user_manager = UserManager::open(USER_MANAGER_PATH)?;
                 user_manager.remove_generation(id)?;
                 user_manager.flush()?;
 
                 println!("{} {id} removed", style("Success").green());
+            }
+            Some(("switch", sub_matches)) => {
+                if caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_OVERRIDE)?
+                    && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_READ_SEARCH)?
+                {
+                    caps::raise(None, CapSet::Effective, Capability::CAP_DAC_OVERRIDE)?;
+                    caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
+                } else {
+                    return Err("Please run hua init as root or with the appropiate capabilities".into());
+                }
+
+                let id = sub_matches
+                    .value_of("ID")
+                    .expect("When switching to a generation, an id has to be given.")
+                    .parse()?;
+
+                let global_paths = ComponentPathBuf::global();
+
+                let mut user_manager = UserManager::open(USER_MANAGER_PATH)?;
+                user_manager.switch_generation(id, &global_paths)?;
+                user_manager.flush()?;
+
+                println!("{} switched to {id}", style("Success").green());
             }
             _ => unreachable!(),
         },

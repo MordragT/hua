@@ -194,6 +194,17 @@ impl UserManager {
             .context(GenerationSnafu)?)
     }
 
+    pub fn switch_generation(
+        &mut self,
+        id: usize,
+        global_paths: &ComponentPathBuf,
+    ) -> UserResult<()> {
+        self.current_generation_manager_mut()
+            .switch_to(id, global_paths)
+            .context(GenerationSnafu)?;
+        Ok(())
+    }
+
     /// Lists all packages in the current generation.
     pub fn list_current_packages(&self) {
         self.current_generation_manager().list_current_packages();
@@ -220,8 +231,6 @@ impl UserManager {
     pub fn path(&self) -> &Path {
         &self.path
     }
-
-    // TODO maybe flush just after every io operation
 
     /// Flushes all data to the backend
     pub fn flush(self) -> UserResult<()> {

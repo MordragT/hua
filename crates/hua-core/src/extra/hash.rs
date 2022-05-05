@@ -13,6 +13,7 @@ use crate::store::{
     object::{Blob, Tree},
 };
 
+/// Provides a Blake3 [Hasher] for the [MerkleTree].
 #[derive(Clone)]
 pub struct Blake3;
 
@@ -30,14 +31,40 @@ impl Hasher for Blake3 {
 
 // TODO: use PartialTrees and merge them when we get to upper directories
 
+/// Calculates the hashes for the directories of an [crate::store::package::Package].
 #[derive(Debug)]
 pub struct PackageHash {
+    /// The [PackageId] caclulated out of all [crate::store::Object] in the directory
+    /// and the [crate::store::package::Package] name.
     pub root: PackageId,
+
+    /// All [ObjectId] of all [Tree] in the directory.
     pub trees: BTreeMap<Tree, ObjectId>,
+
+    /// All [ObjectId] of all [Blob] in the directory.
     pub blobs: BTreeMap<Blob, ObjectId>,
 }
 
 impl PackageHash {
+    /// Calculates the hashes of an directory
+    ///
+    /// # Arguments
+    ///
+    /// - `path` - The path of the directory
+    /// - `package_name` - The name of the package
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use hua_core::extra::hash::PackageHash;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let package_name = "make";
+    /// let path = "./make-4.3";
+    ///
+    /// let hash = PackageHash::from_path(path, package_name)?;
+    /// # Ok(())
+    /// # }
     pub fn from_path<P: AsRef<Path>>(path: P, package_name: &str) -> io::Result<Self> {
         let mut trees = BTreeMap::new();
         let mut blobs = BTreeMap::new();

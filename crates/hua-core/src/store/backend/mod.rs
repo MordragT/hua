@@ -1,6 +1,7 @@
 use super::{object::Objects, package::Packages, *};
 
 pub use local::LocalBackend;
+pub use memory::MemoryBackend;
 pub use remote::RemoteBackend;
 
 mod local;
