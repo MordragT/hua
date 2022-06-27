@@ -6,7 +6,7 @@
 #![feature(c_size_t)]
 #![feature(unix_chown)]
 
-pub mod c_ffi;
+// pub mod c_ffi;
 pub mod dependency;
 pub mod extra;
 pub mod generation;
