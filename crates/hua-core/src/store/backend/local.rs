@@ -11,10 +11,9 @@ use std::{
 #[derive(Debug)]
 pub struct LocalBackend {
     path: PathBuf,
-    db: PathDatabase<(Objects, Packages, Derivations), Pot>,
+    db: PathDatabase<(Objects, Packages), Pot>,
     objects: Objects,
     packages: Packages,
-    derivations: Derivations,
 }
 
 impl ReadBackend for LocalBackend {
@@ -22,15 +21,13 @@ impl ReadBackend for LocalBackend {
 
     fn open(path: PathBuf) -> StoreResult<Self> {
         let db = PathDatabase::load_from_path(path.clone()).context(RustbreakLoadSnafu)?;
-        let (objects, packages, derivations) =
-            db.get_data(false).context(RustbreakLoadDataSnafu)?;
+        let (objects, packages) = db.get_data(false).context(RustbreakLoadDataSnafu)?;
 
         Ok(Self {
             path,
             db,
             objects,
             packages,
-            derivations,
         })
     }
 
@@ -41,21 +38,14 @@ impl ReadBackend for LocalBackend {
     fn packages(&self) -> &Packages {
         &self.packages
     }
-
-    fn derivations(&self) -> &Derivations {
-        &self.derivations
-    }
 }
 
 impl WriteBackend for LocalBackend {
     type Source = PathBuf;
 
     fn init(path: PathBuf) -> StoreResult<Self> {
-        let db = PathDatabase::create_at_path(
-            path.clone(),
-            (Objects::new(), Packages::new(), Derivations::new()),
-        )
-        .context(RustbreakCreateSnafu)?;
+        let db = PathDatabase::create_at_path(path.clone(), (Objects::new(), Packages::new()))
+            .context(RustbreakCreateSnafu)?;
 
         let mut perm = fs::metadata(&path).context(IoSnafu)?.permissions();
         perm.set_mode(0o644);
@@ -67,7 +57,6 @@ impl WriteBackend for LocalBackend {
             db,
             objects: Objects::new(),
             packages: Packages::new(),
-            derivations: Derivations::new(),
         })
     }
 
@@ -79,13 +68,9 @@ impl WriteBackend for LocalBackend {
         &mut self.packages
     }
 
-    fn derivations_mut(&mut self) -> &mut Derivations {
-        &mut self.derivations
-    }
-
     fn flush(self) -> StoreResult<()> {
         self.db
-            .put_data((self.objects, self.packages, self.derivations), true)
+            .put_data((self.objects, self.packages), true)
             .context(RustbreakSaveDataSnafu)?;
         unix::fs::chown(self.path, UID, GID).context(IoSnafu)?;
 

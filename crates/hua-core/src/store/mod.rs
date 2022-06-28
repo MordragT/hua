@@ -1,7 +1,9 @@
+use crate::recipe::Derivation;
+
 use self::{
     id::{ObjectId, PackageId},
     object::{Object, ObjectKind},
-    package::PackageSource,
+    package::LocalPackageSource,
 };
 use snafu::prelude::*;
 use std::path::PathBuf;
@@ -9,7 +11,7 @@ use std::path::PathBuf;
 pub use store::*;
 
 pub mod backend;
-pub mod derivation;
+// pub mod derivation;
 pub mod id;
 pub mod locator;
 pub mod object;
@@ -59,8 +61,8 @@ pub enum StoreError {
     FsExtraError { source: fs_extra::error::Error },
     #[snafu(display("Waldir Error: {source}"))]
     WalkDirError { source: walkdir::Error },
-    #[snafu(display("Package could not be verified: {package}"))]
-    PackageNotVerified { package: PackageSource },
+    #[snafu(display("Package could not be verified: {drv}"))]
+    PackageNotVerified { drv: Derivation },
     #[snafu(display("Packge could not be found for {id}"))]
     PackageNotFoundById { id: PackageId },
     #[snafu(display("Object vould not be found for {id}"))]

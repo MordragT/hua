@@ -1,5 +1,5 @@
 use super::ObjectId;
-use relative_path::RelativePathBuf;
+use relative_path::{RelativePath, RelativePathBuf};
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
@@ -7,7 +7,6 @@ use std::{
     fmt,
     path::{Path, PathBuf},
 };
-use url::Url;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Blob {
@@ -113,13 +112,21 @@ impl Object {
         }
     }
 
-    pub fn to_url(&self, url: &Url) -> Url {
+    pub fn relative_path(&self) -> &RelativePath {
         match &self {
-            Self::Tree(tree) => url.join(tree.path.as_str()).unwrap(),
-            Self::Blob(blob) => url.join(blob.path.as_str()).unwrap(),
-            Self::Link(link) => url.join(link.link.as_str()).unwrap(),
+            Self::Tree(tree) => &tree.path,
+            Self::Blob(blob) => &blob.path,
+            Self::Link(link) => &link.link,
         }
     }
+
+    // pub fn to_url(&self, url: &Url) -> Url {
+    //     match &self {
+    //         Self::Tree(tree) => url.join(tree.path.as_str()).unwrap(),
+    //         Self::Blob(blob) => url.join(blob.path.as_str()).unwrap(),
+    //         Self::Link(link) => url.join(link.link.as_str()).unwrap(),
+    //     }
+    // }
 
     pub fn as_tree(&self) -> Option<&Tree> {
         match &self {
@@ -335,6 +342,45 @@ impl Objects {
         ids.into_iter().filter_map(move |id| {
             if let Some(object) = self.nodes.get(id) {
                 object.clone().into_blob()
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn get_trees_cloned<'a>(
+        &'a self,
+        ids: impl IntoIterator<Item = &'a ObjectId> + 'a,
+    ) -> impl Iterator<Item = Tree> + 'a {
+        ids.into_iter().filter_map(move |id| {
+            if let Some(object) = self.nodes.get(id) {
+                object.clone().into_tree()
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn get_blobs_ids_cloned<'a>(
+        &'a self,
+        ids: impl IntoIterator<Item = &'a ObjectId> + 'a,
+    ) -> impl Iterator<Item = (Blob, ObjectId)> + 'a {
+        ids.into_iter().filter_map(move |id| {
+            if let Some(object) = self.nodes.get(id) {
+                object.clone().into_blob().map(|blob| (blob, *id))
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn get_trees_ids_cloned<'a>(
+        &'a self,
+        ids: impl IntoIterator<Item = &'a ObjectId> + 'a,
+    ) -> impl Iterator<Item = (Tree, ObjectId)> + 'a {
+        ids.into_iter().filter_map(move |id| {
+            if let Some(object) = self.nodes.get(id) {
+                object.clone().into_tree().map(|tree| (tree, *id))
             } else {
                 None
             }

@@ -14,3 +14,14 @@ cap-run ARG: build setcap
 
 sudo-run ARG: build
     sudo {{debug}} {{ARG}}
+
+hua-clean: build setcap
+    sudo rm -rf /hua
+    {{debug}} init
+
+hua-cache: build setcap
+    {{debug}} cache add http://localhost:8080
+
+hua-add: hua-clean hua-cache
+    {{debug}} add recipes/make-bin.toml
+

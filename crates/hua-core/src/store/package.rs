@@ -1,146 +1,89 @@
+use crate::recipe::Derivation;
+
 use super::{
-    derivation::Derivation,
     object::{Blob, Tree},
     ObjectId, PackageId,
 };
-use crate::{dependency::Requirement, extra::hash::PackageHash};
 use console::style;
-use log::debug;
-use relative_path::RelativePathBuf;
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt::{self},
-    io,
     path::{Path, PathBuf},
 };
 use url::Url;
 
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
-pub struct PackageDesc {
-    pub name: String,
-    pub desc: String,
-    pub version: Version,
-    pub licenses: Vec<String>,
-    // pub requires: HashSet<Requirement>,
-}
-
-impl PackageDesc {
-    pub fn new(
-        name: String,
-        desc: String,
-        version: Version,
-        licenses: Vec<String>,
-        // requires: HashSet<Requirement>,
-    ) -> Self {
-        Self {
-            name,
-            desc,
-            version,
-            licenses,
-            // requires,
-        }
-    }
-
-    pub fn path_in_store<P: AsRef<Path>>(&self, store_path: P, id: PackageId) -> PathBuf {
-        let name_version_id = format!("{}-{}-{}", self.name, self.version, id);
-        store_path.as_ref().join(name_version_id)
-    }
-}
-
-impl fmt::Display for PackageDesc {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{} {}\n\t{}\n",
-            style(&self.name).green(),
-            &self.version,
-            &self.desc,
-        )?;
-        f.write_str("\tlicenses: ")?;
-        for license in &self.licenses {
-            write!(f, "{license} ")?;
-        }
-        // f.write_str("\n\trequires:\n")?;
-        // for req in &self.requires {
-        //     write!(f, "{req}\n")?;
-        // }
-        Ok(())
-    }
-}
-
-#[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-pub struct PackageSource {
-    // #[serde_as(as = "DisplayFromStr")]
-    // pub id: PackageId,
+pub struct LocalPackageSource {
     pub drv: Derivation,
-    pub desc: PackageDesc,
     pub path: PathBuf,
 }
 
-impl PackageSource {
+impl LocalPackageSource {
     /// Creates a new package
-    pub fn new(drv: Derivation, desc: PackageDesc, path: PathBuf) -> Self {
-        Self { drv, desc, path }
+    pub fn new(drv: Derivation, path: PathBuf) -> Self {
+        Self { drv, path }
     }
 
     pub fn name(&self) -> &String {
-        &self.desc.name
+        &self.drv.name
     }
 
     pub fn version(&self) -> &Version {
-        &self.desc.version
+        &self.drv.version
     }
 
-    // pub fn requires(&self) -> &HashSet<Requirement> {
-    //     &self.desc.requires
-    // }
-
-    // pub fn verify<P: AsRef<Path>>(
-    //     &self,
-    //     path: P,
-    // ) -> io::Result<(bool, BTreeMap<Tree, ObjectId>, BTreeMap<Blob, ObjectId>)> {
-    //     let PackageHash { root, trees, blobs } = PackageHash::from_path(path, &self.desc.name)?;
-    //     debug!("Calculated root {root}");
-
-    //     Ok((self.id == root, trees, blobs))
-    // }
-
-    pub fn path_in_store<P: AsRef<Path>>(&self, store_path: P, id: PackageId) -> PathBuf {
-        let name_version_id = format!("{}-{}-{}", self.desc.name, self.desc.version, id);
-        store_path.as_ref().join(name_version_id)
+    pub fn path_in_store<P: AsRef<Path>>(&self, store_path: P, id: &PackageId) -> PathBuf {
+        self.drv.path_in_store(store_path, id)
     }
-
-    // pub fn relative_path(&self) -> RelativePathBuf {
-    //     format!("{}-{}-{}", self.desc.name, self.desc.version, self.id).into()
-    // }
 }
 
-impl fmt::Display for PackageSource {
-    // fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    //     write!(f, "{:x} {}", style(self.id.truncate()).blue(), self.desc)
-    // }
+impl fmt::Display for LocalPackageSource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Path: {:?}\nDerivation: {}\nDescription: {}",
-            self.path, self.drv, self.desc
+        write!(f, "Path: {:?}\nDerivation: {}", self.path, self.drv)
+    }
+}
+
+pub struct RemotePackageSource {
+    pub id: PackageId,
+    pub drv: Derivation,
+    pub base: Url,
+    pub blobs: BTreeMap<Blob, ObjectId>,
+    pub trees: BTreeMap<Tree, ObjectId>,
+}
+
+impl ToString for RemotePackageSource {
+    fn to_string(&self) -> String {
+        format!(
+            "{} {}",
+            style(&self.base).red(),
+            style(&self.drv.name).blue()
         )
     }
 }
 
-impl AsRef<PackageDesc> for PackageSource {
-    fn as_ref(&self) -> &PackageDesc {
-        &self.desc
+impl RemotePackageSource {
+    pub fn new(
+        id: PackageId,
+        drv: Derivation,
+        base: Url,
+        blobs: BTreeMap<Blob, ObjectId>,
+        trees: BTreeMap<Tree, ObjectId>,
+    ) -> Self {
+        Self {
+            id,
+            drv,
+            base,
+            blobs,
+            trees,
+        }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Packages {
-    nodes: HashMap<PackageId, PackageDesc>,
+    nodes: HashMap<PackageId, Derivation>,
     children: HashMap<PackageId, HashSet<ObjectId>>,
 }
 
@@ -149,9 +92,11 @@ impl Packages {
         Self::default()
     }
 
-    // pub fn contains_package(&self, package: &PackageSource) -> bool {
-    //     self.nodes.contains_key(&package.id)
-    // }
+    pub fn contains_drv(&self, drv: &Derivation) -> Option<PackageId> {
+        self.nodes
+            .iter()
+            .find_map(|(id, other)| if drv == other { Some(*id) } else { None })
+    }
 
     pub fn contains(&self, id: &PackageId) -> bool {
         self.nodes.contains_key(id)
@@ -160,11 +105,11 @@ impl Packages {
     pub fn insert(
         &mut self,
         id: PackageId,
-        desc: PackageDesc,
+        drv: Derivation,
         objects: HashSet<ObjectId>,
-    ) -> Option<PackageDesc> {
+    ) -> Option<Derivation> {
         self.children.insert(id, objects);
-        self.nodes.insert(id, desc)
+        self.nodes.insert(id, drv)
     }
 
     pub fn insert_child(&mut self, id: &PackageId, child: ObjectId) -> Option<bool> {
@@ -175,11 +120,11 @@ impl Packages {
         }
     }
 
-    pub fn get(&self, id: &PackageId) -> Option<&PackageDesc> {
+    pub fn get(&self, id: &PackageId) -> Option<&Derivation> {
         self.nodes.get(id)
     }
 
-    pub unsafe fn get_unchecked(&self, id: &PackageId) -> &PackageDesc {
+    pub unsafe fn get_unchecked(&self, id: &PackageId) -> &Derivation {
         self.nodes.get(id).unwrap_unchecked()
     }
 
@@ -187,20 +132,20 @@ impl Packages {
         self.children.get(id)
     }
 
-    pub fn get_full(&self, id: &PackageId) -> Option<(&PackageDesc, &HashSet<ObjectId>)> {
-        if let Some(desc) = self.nodes.get(id) {
-            self.children.get(id).map(|objects| ((desc, objects)))
+    pub fn get_full(&self, id: &PackageId) -> Option<(&Derivation, &HashSet<ObjectId>)> {
+        if let Some(drv) = self.nodes.get(id) {
+            self.children.get(id).map(|objects| ((drv, objects)))
         } else {
             None
         }
     }
 
-    pub fn remove(&mut self, id: &PackageId) -> Option<(PackageDesc, HashSet<ObjectId>)> {
+    pub fn remove(&mut self, id: &PackageId) -> Option<(Derivation, HashSet<ObjectId>)> {
         let desc = self.nodes.remove(id);
         let children = self.children.remove(id);
 
-        if let Some(desc) = desc && let Some(children) = children {
-            Some((desc, children))
+        if let Some(drv) = desc && let Some(children) = children {
+            Some((drv, children))
         } else {
             None
         }
@@ -231,14 +176,14 @@ impl Packages {
     pub fn filter<P>(
         &self,
         predicate: P,
-    ) -> impl Iterator<Item = (&PackageId, &PackageDesc, &HashSet<ObjectId>)>
+    ) -> impl Iterator<Item = (&PackageId, &Derivation, &HashSet<ObjectId>)>
     where
-        P: Fn(&PackageId, &PackageDesc, &HashSet<ObjectId>) -> bool,
+        P: Fn(&PackageId, &Derivation, &HashSet<ObjectId>) -> bool,
     {
-        self.nodes.iter().filter_map(move |(id, desc)| {
+        self.nodes.iter().filter_map(move |(id, drv)| {
             let objects = unsafe { self.children.get(id).unwrap_unchecked() };
-            if predicate(id, desc, objects) {
-                Some((id, desc, objects))
+            if predicate(id, drv, objects) {
+                Some((id, drv, objects))
             } else {
                 None
             }
@@ -248,36 +193,36 @@ impl Packages {
     pub fn filter_by_name_starting_with<'a>(
         &'a self,
         name: &'a str,
-    ) -> impl Iterator<Item = (&PackageId, &PackageDesc, &HashSet<ObjectId>)> + '_ {
+    ) -> impl Iterator<Item = (&PackageId, &Derivation, &HashSet<ObjectId>)> + '_ {
         self.filter(move |_id, desc, _objects| desc.name.starts_with(name))
     }
 
     pub fn filter_by_name_containing<'a>(
         &'a self,
         name: &'a str,
-    ) -> impl Iterator<Item = (&PackageId, &PackageDesc, &HashSet<ObjectId>)> + '_ {
+    ) -> impl Iterator<Item = (&PackageId, &Derivation, &HashSet<ObjectId>)> + '_ {
         self.filter(move |_id, desc, _objects| desc.name.contains(name))
     }
 
-    pub fn find<P: Fn(&PackageId, &PackageDesc, &HashSet<ObjectId>) -> bool>(
+    pub fn find<P: Fn(&PackageId, &Derivation, &HashSet<ObjectId>) -> bool>(
         &self,
         predicate: P,
-    ) -> Option<(&PackageId, &PackageDesc)> {
-        self.nodes.iter().find(move |(id, desc)| {
+    ) -> Option<(&PackageId, &Derivation)> {
+        self.nodes.iter().find(move |(id, drv)| {
             let objects = unsafe { self.children.get(id).unwrap_unchecked() };
-            predicate(*id, *desc, objects)
+            predicate(*id, *drv, objects)
         })
     }
 
-    pub fn find_by_name_starting_with(&self, name: &str) -> Option<(&PackageId, &PackageDesc)> {
+    pub fn find_by_name_starting_with(&self, name: &str) -> Option<(&PackageId, &Derivation)> {
         self.find(|_id, p, _objects| p.name.starts_with(name))
     }
 
-    pub fn find_by_name_containing(&self, name: &str) -> Option<(&PackageId, &PackageDesc)> {
+    pub fn find_by_name_containing(&self, name: &str) -> Option<(&PackageId, &Derivation)> {
         self.find(|_id, p, _objects| p.name.contains(name))
     }
 
-    pub fn find_by_name(&self, name: &str) -> Option<(&PackageId, &PackageDesc)> {
+    pub fn find_by_name(&self, name: &str) -> Option<(&PackageId, &Derivation)> {
         self.find(|_id, p, _objects| p.name == name)
     }
 

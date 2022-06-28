@@ -11,7 +11,6 @@ use walkdir::WalkDir;
 use crate::store::{
     id::{ObjectId, PackageId, RawId},
     object::{Blob, Tree},
-    package::PackageSource,
 };
 
 /// Provides a Blake3 [Hasher] for the [MerkleTree].
@@ -30,9 +29,14 @@ impl Hasher for Blake3 {
     }
 }
 
-pub fn root_hash(source: &PackageSource) -> io::Result<PackageId> {
-    let pkg_hash = PackageHash::from_path(&source.path, source.name())?;
+pub fn root_hash(path: &Path, name: &str) -> io::Result<PackageId> {
+    let pkg_hash = PackageHash::from_path(&path, name)?;
     Ok(pkg_hash.root)
+}
+
+pub fn verify(package_id: PackageId, path: &Path, name: &str) -> io::Result<bool> {
+    let pkg_hash = PackageHash::from_path(&path, name)?;
+    Ok(pkg_hash.root == package_id)
 }
 
 // TODO: use PartialTrees and merge them when we get to upper directories

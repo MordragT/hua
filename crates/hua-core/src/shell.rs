@@ -5,6 +5,7 @@ use crate::{
     generation::{Generation, GenerationBuilder},
     jail::{Bind, JailBuilder},
     store::{backend::ReadBackend, Store},
+    HUA_PATH,
 };
 use os_type::OSType;
 use snafu::prelude::*;
@@ -96,7 +97,8 @@ impl ShellBuilder {
             .bind(Bind::read_only(&gen_paths.binary, "/usr/bin/"))
             .bind(Bind::read_only(&gen_paths.library, "/usr/lib/"))
             .bind(Bind::read_only(&gen_paths.share, "/usr/share/"))
-            .bind(Bind::read_only(&gen_paths.config, "/etc/"));
+            .bind(Bind::read_only(&gen_paths.config, "/etc/"))
+            .bind(Bind::read_only(HUA_PATH, HUA_PATH));
 
         let jail = match os_type::current_platform().os_type {
             OSType::NixOS => jail.bind(Bind::read_only("/nix/store", "/nix/store")),

@@ -1,7 +1,4 @@
-use crate::{
-    extra,
-    store::{object::Blob, package::PackageDesc},
-};
+use crate::{extra, recipe::Derivation, store::object::Blob};
 use console::style;
 use semver::VersionReq;
 use serde::{Deserialize, Serialize};
@@ -85,8 +82,8 @@ impl fmt::Display for Requirement {
     }
 }
 
-impl From<(PackageDesc, BTreeSet<Blob>)> for Requirement {
-    fn from(data: (PackageDesc, BTreeSet<Blob>)) -> Self {
+impl From<(Derivation, BTreeSet<Blob>)> for Requirement {
+    fn from(data: (Derivation, BTreeSet<Blob>)) -> Self {
         Self::new(
             data.0.name,
             extra::exact_version_req(data.0.version),

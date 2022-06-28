@@ -1,7 +1,5 @@
 use super::{step::Step, Conflict, DependencyError, DependencyResult, Requirement};
-use crate::store::{
-    backend::ReadBackend, id::PackageId, object::Blob, package::PackageDesc, Store,
-};
+use crate::store::{backend::ReadBackend, id::PackageId, object::Blob, Store};
 use daggy::{Dag, NodeIndex};
 use std::collections::{HashMap, HashSet};
 
@@ -171,13 +169,13 @@ impl<'a> DependencyGraph<'a> {
     ) -> DependencyResult<NodeIndex<usize>> {
         let options = store
             .matches(req)
-            .map(|(id, desc, blobs, drv)| (id, (desc, blobs, drv)))
-            .collect::<HashMap<&PackageId, (_, _, _)>>();
+            .map(|(id, drv, blobs)| (id, (drv, blobs)))
+            .collect::<HashMap<&PackageId, (_, _)>>();
 
         let node = match options.len() {
             0 => self.relations.add_node(Step::Unresolved(req)),
             1 => {
-                let (id, (package, blobs, drv)) =
+                let (id, (package, blobs)) =
                     unsafe { options.into_iter().next().unwrap_unchecked() };
                 if let Some(conflict) = self.conflicts(&package.name, blobs) {
                     return Err(conflict)?;
@@ -187,7 +185,7 @@ impl<'a> DependencyGraph<'a> {
                 self.visited.insert(req, node);
                 self.inserted.insert(*id, node);
 
-                let children = self.resolve_multiple(&drv.requires, store, choices)?;
+                let children = self.resolve_multiple(&package.requires, store, choices)?;
                 let edges = children.into_iter().map(|(req, child)| (node, child, req));
                 self.relations
                     .add_edges(edges)
@@ -221,11 +219,9 @@ impl<'a> DependencyGraph<'a> {
             let mut result = None;
 
             for id in options.iter() {
-                let drv_id = store.derivations().get_drv_of_pkg(id).unwrap();
-                let drv = store.derivations().get(&drv_id).unwrap();
-                let name = &store.packages().get(id).unwrap().name;
+                let drv = store.packages().get(id).unwrap();
                 let blobs = unsafe { store.get_blobs_of_package(id).unwrap_unchecked() };
-                if conflicts(&mut self.names, &mut self.objects, name, blobs).is_none() {
+                if conflicts(&mut self.names, &mut self.objects, &drv.name, blobs).is_none() {
                     *step = Step::Resolved(*id);
                     result = Some(drv);
                     break;
@@ -319,7 +315,7 @@ mod tests {
         let pkgs = vec![one, two, three, four];
         store
             .extend(pkgs)
-            .collect::<Result<Vec<Option<PathBuf>>, StoreError>>()
+            .collect::<Result<Vec<PathBuf>, StoreError>>()
             .unwrap();
 
         graph.resolve(reqs, &store).unwrap();
@@ -348,7 +344,7 @@ mod tests {
         let pkgs = vec![one, two];
         store
             .extend(pkgs)
-            .collect::<Result<Vec<Option<PathBuf>>, StoreError>>()
+            .collect::<Result<Vec<PathBuf>, StoreError>>()
             .unwrap();
 
         graph.resolve(reqs, &store).unwrap();
@@ -376,7 +372,7 @@ mod tests {
         let pkgs = vec![one, two];
         store
             .extend(pkgs)
-            .collect::<Result<Vec<Option<PathBuf>>, StoreError>>()
+            .collect::<Result<Vec<PathBuf>, StoreError>>()
             .unwrap();
 
         let err = graph.resolve(reqs, &store).unwrap_err();
@@ -409,7 +405,7 @@ mod tests {
         let pkgs = vec![one, two, three];
         store
             .extend(pkgs)
-            .collect::<Result<Vec<Option<PathBuf>>, StoreError>>()
+            .collect::<Result<Vec<PathBuf>, StoreError>>()
             .unwrap();
 
         let err = graph.resolve(reqs, &store).unwrap_err();
@@ -443,7 +439,7 @@ mod tests {
         let pkgs = vec![one, two];
         store
             .extend(pkgs)
-            .collect::<Result<Vec<Option<PathBuf>>, StoreError>>()
+            .collect::<Result<Vec<PathBuf>, StoreError>>()
             .unwrap();
 
         dbg!(&store);

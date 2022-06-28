@@ -33,8 +33,8 @@ impl From<PackageId> for RawId {
     }
 }
 
-impl From<DerivationId> for RawId {
-    fn from(id: DerivationId) -> Self {
+impl From<ObjectId> for RawId {
+    fn from(id: ObjectId) -> Self {
         id.0
     }
 }
@@ -202,98 +202,6 @@ impl Deref for ObjectId {
 }
 
 impl FromStr for ObjectId {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let vec = extra::str::parse_hex(s);
-        vec.try_into()
-            .map_err(|_| "Could not convert vec to id.".to_owned())
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
-pub struct DerivationId(RawId);
-
-impl DerivationId {
-    pub fn as_bytes(&self) -> &[u8] {
-        &self.0 .0
-    }
-
-    pub fn truncate(&self) -> u64 {
-        let mut res: [u8; 8] = Default::default();
-        res.copy_from_slice(&self.0 .0[0..8]);
-        u64::from_be_bytes(res)
-    }
-}
-
-impl fmt::Display for DerivationId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for byte in &self.0 .0 {
-            write!(f, "{:02x}", byte)?;
-        }
-        Ok(())
-    }
-}
-
-impl fmt::Debug for DerivationId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for byte in &self.0 .0 {
-            write!(f, "{:02x}", byte)?;
-        }
-        Ok(())
-    }
-}
-
-impl From<[u8; 32]> for DerivationId {
-    fn from(hash: [u8; 32]) -> Self {
-        DerivationId(RawId(hash))
-    }
-}
-
-impl From<DerivationId> for Vec<u8> {
-    fn from(id: DerivationId) -> Self {
-        id.0 .0.to_vec()
-    }
-}
-
-impl TryFrom<Vec<u8>> for DerivationId {
-    type Error = Vec<u8>;
-
-    fn try_from(vec: Vec<u8>) -> Result<Self, Self::Error> {
-        let hash = <[u8; 32]>::try_from(vec)?;
-        Ok(DerivationId(RawId(hash)))
-    }
-}
-
-impl TryFrom<&[u8]> for DerivationId {
-    type Error = TryFromSliceError;
-
-    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
-        let hash = <[u8; 32]>::try_from(slice)?;
-        Ok(DerivationId(RawId(hash)))
-    }
-}
-
-impl From<RawId> for DerivationId {
-    fn from(id: RawId) -> Self {
-        DerivationId(id)
-    }
-}
-
-impl From<PackageId> for DerivationId {
-    fn from(id: PackageId) -> Self {
-        DerivationId(id.0)
-    }
-}
-
-impl Deref for DerivationId {
-    type Target = RawId;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl FromStr for DerivationId {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {

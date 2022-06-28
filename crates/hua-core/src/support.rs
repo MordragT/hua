@@ -1,16 +1,12 @@
 use crate::{
     dependency::Requirement,
-    store::{
-        derivation::Derivation,
-        id::PackageId,
-        object::Blob,
-        package::{PackageDesc, PackageSource},
-    },
+    recipe::Derivation,
+    store::{object::Blob, package::LocalPackageSource},
 };
 use relative_path::RelativePathBuf;
 use semver::{Version, VersionReq};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, HashSet},
     fs::{self, File},
     path::Path,
 };
@@ -22,7 +18,7 @@ pub fn pkg_req_ver_prov<P: AsRef<Path>>(
     requires: impl IntoIterator<Item = Requirement>,
     version: &str,
     provides: &str,
-) -> PackageSource {
+) -> LocalPackageSource {
     let path = path.as_ref();
     let package_lib_path = path.join("lib");
     fs::create_dir_all(&package_lib_path).unwrap();
@@ -32,26 +28,26 @@ pub fn pkg_req_ver_prov<P: AsRef<Path>>(
 
     let _lib = File::create(&lib_path).unwrap();
 
-    // let PackageHash {
-    //     root,
-    //     trees: _,
-    //     blobs: _,
-    // } = PackageHash::from_path(path, name).unwrap();
-
-    let drv = Derivation::new(requires);
-
-    let desc = PackageDesc::new(
+    let drv = Derivation::new(
         name.to_owned(),
-        "Some package".to_owned(),
         Version::parse(version).unwrap(),
+        "Some package".to_owned(),
+        1,
+        1,
+        String::new(),
         vec!["MIT".to_owned()],
+        requires.into_iter().collect(),
+        HashSet::new(),
+        Vec::new(),
+        String::new(),
+        RelativePathBuf::new(),
     );
 
-    PackageSource::new(drv, desc, path.to_owned())
+    LocalPackageSource::new(drv, path.to_owned())
 }
 
 #[allow(dead_code)]
-pub fn pkg_prov<P: AsRef<Path>>(name: &str, path: P, provides: &str) -> PackageSource {
+pub fn pkg_prov<P: AsRef<Path>>(name: &str, path: P, provides: &str) -> LocalPackageSource {
     pkg_req_ver_prov(name, path, [], "1.0.0", provides)
 }
 
@@ -60,17 +56,17 @@ pub fn pkg_req<P: AsRef<Path>>(
     name: &str,
     path: P,
     requires: impl IntoIterator<Item = Requirement>,
-) -> PackageSource {
+) -> LocalPackageSource {
     pkg_req_ver_prov(name, path, requires, "1.0.0", name)
 }
 
 #[allow(dead_code)]
-pub fn pkg<P: AsRef<Path>>(name: &str, path: P) -> PackageSource {
+pub fn pkg<P: AsRef<Path>>(name: &str, path: P) -> LocalPackageSource {
     pkg_req(name, path, BTreeSet::new())
 }
 
 #[allow(dead_code)]
-pub fn pkg_ver<P: AsRef<Path>>(name: &str, path: P, version: &str) -> PackageSource {
+pub fn pkg_ver<P: AsRef<Path>>(name: &str, path: P, version: &str) -> LocalPackageSource {
     pkg_req_ver_prov(name, path, [], version, name)
 }
 

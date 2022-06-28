@@ -480,7 +480,7 @@ mod tests {
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
-        let one_id = hash::root_hash(&one).unwrap();
+        let one_id = hash::root_hash(&one.path, &one.name()).unwrap();
         let _ = store.insert(one).unwrap();
 
         let req = req("one", ">0.0.1");

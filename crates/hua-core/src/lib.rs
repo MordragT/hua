@@ -1,9 +1,11 @@
-#![warn(missing_docs)]
+// #![warn(missing_docs)]
 #![feature(let_chains)]
 #![feature(slice_pattern)]
 #![feature(assert_matches)]
 #![feature(c_size_t)]
 #![feature(unix_chown)]
+
+pub const HUA_PATH: &str = "/hua";
 
 // pub mod c_ffi;
 pub mod dependency;
