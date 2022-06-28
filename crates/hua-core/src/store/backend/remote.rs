@@ -13,6 +13,7 @@ use super::ReadBackend;
 pub struct RemoteBackend {
     objects: Objects,
     packages: Packages,
+    derivations: Derivations,
 }
 
 impl ReadBackend for RemoteBackend {
@@ -23,18 +24,27 @@ impl ReadBackend for RemoteBackend {
 
         let path = cache.cached_path(source.as_str()).context(CacheSnafu)?;
 
-        let db = PathDatabase::<(Objects, Packages), Pot>::load_from_path(path)
+        let db = PathDatabase::<(Objects, Packages, Derivations), Pot>::load_from_path(path)
             .context(RustbreakLoadSnafu)?;
-        let (objects, packages) = db.get_data(false).context(RustbreakLoadDataSnafu)?;
+        let (objects, packages, derivations) =
+            db.get_data(false).context(RustbreakLoadDataSnafu)?;
 
-        Ok(Self { objects, packages })
+        Ok(Self {
+            objects,
+            packages,
+            derivations,
+        })
     }
 
-    fn packages(&self) -> &crate::store::package::Packages {
+    fn packages(&self) -> &Packages {
         &self.packages
     }
 
-    fn objects(&self) -> &crate::store::object::Objects {
+    fn objects(&self) -> &Objects {
         &self.objects
+    }
+
+    fn derivations(&self) -> &Derivations {
+        &self.derivations
     }
 }

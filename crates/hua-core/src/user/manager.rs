@@ -244,6 +244,7 @@ impl UserManager {
 #[cfg(test)]
 mod tests {
     use super::UserManager;
+    use crate::extra::hash;
     use crate::extra::path::ComponentPathBuf;
     use crate::user::UserError;
     use crate::{store::LocalStore, support::*};
@@ -297,7 +298,7 @@ mod tests {
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
-        store.insert(one, one_path).unwrap();
+        store.insert(one).unwrap();
 
         let req = req("one", ">0.0.1");
         let res = user_manager.insert_requirement(req, &store).unwrap();
@@ -317,7 +318,7 @@ mod tests {
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
-        store.insert(one, one_path).unwrap();
+        store.insert(one).unwrap();
 
         let req = req("one", ">0.0.1");
         let _ = user_manager
@@ -356,7 +357,7 @@ mod tests {
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
-        store.insert(one, one_path).unwrap();
+        store.insert(one).unwrap();
 
         let req = req("one", ">0.0.1");
         let _ = user_manager
@@ -395,7 +396,7 @@ mod tests {
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
-        store.insert(one, one_path).unwrap();
+        store.insert(one).unwrap();
 
         let req = req("one", ">0.0.1");
         let _ = user_manager.insert_requirement(req, &store).unwrap();
@@ -437,7 +438,7 @@ mod tests {
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
-        store.insert(one, one_path).unwrap();
+        store.insert(one).unwrap();
 
         let req = req("one", ">0.0.1");
         let _ = user_manager.insert_requirement(req, &store).unwrap();
@@ -479,13 +480,13 @@ mod tests {
 
         let one_path = temp_dir.child("one");
         let one = pkg("one", &one_path);
-        let id = one.id;
-        let _ = store.insert(one, one_path).unwrap();
+        let one_id = hash::root_hash(&one).unwrap();
+        let _ = store.insert(one).unwrap();
 
         let req = req("one", ">0.0.1");
         let _ = user_manager.insert_requirement(req, &store).unwrap();
 
-        let res = user_manager.contains(&id);
+        let res = user_manager.contains(&one_id);
 
         assert!(res);
     }

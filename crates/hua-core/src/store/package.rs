@@ -1,4 +1,5 @@
 use super::{
+    derivation::Derivation,
     object::{Blob, Tree},
     ObjectId, PackageId,
 };
@@ -23,7 +24,7 @@ pub struct PackageDesc {
     pub desc: String,
     pub version: Version,
     pub licenses: Vec<String>,
-    pub requires: HashSet<Requirement>,
+    // pub requires: HashSet<Requirement>,
 }
 
 impl PackageDesc {
@@ -32,15 +33,20 @@ impl PackageDesc {
         desc: String,
         version: Version,
         licenses: Vec<String>,
-        requires: HashSet<Requirement>,
+        // requires: HashSet<Requirement>,
     ) -> Self {
         Self {
             name,
             desc,
             version,
             licenses,
-            requires,
+            // requires,
         }
+    }
+
+    pub fn path_in_store<P: AsRef<Path>>(&self, store_path: P, id: PackageId) -> PathBuf {
+        let name_version_id = format!("{}-{}-{}", self.name, self.version, id);
+        store_path.as_ref().join(name_version_id)
     }
 }
 
@@ -57,26 +63,28 @@ impl fmt::Display for PackageDesc {
         for license in &self.licenses {
             write!(f, "{license} ")?;
         }
-        f.write_str("\n\trequires:\n")?;
-        for req in &self.requires {
-            write!(f, "{req}\n")?;
-        }
+        // f.write_str("\n\trequires:\n")?;
+        // for req in &self.requires {
+        //     write!(f, "{req}\n")?;
+        // }
         Ok(())
     }
 }
 
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-pub struct Package {
-    #[serde_as(as = "DisplayFromStr")]
-    pub id: PackageId,
+pub struct PackageSource {
+    // #[serde_as(as = "DisplayFromStr")]
+    // pub id: PackageId,
+    pub drv: Derivation,
     pub desc: PackageDesc,
+    pub path: PathBuf,
 }
 
-impl Package {
+impl PackageSource {
     /// Creates a new package
-    pub fn new(id: PackageId, desc: PackageDesc) -> Self {
-        Self { id, desc }
+    pub fn new(drv: Derivation, desc: PackageDesc, path: PathBuf) -> Self {
+        Self { drv, desc, path }
     }
 
     pub fn name(&self) -> &String {
@@ -87,37 +95,44 @@ impl Package {
         &self.desc.version
     }
 
-    pub fn requires(&self) -> &HashSet<Requirement> {
-        &self.desc.requires
-    }
+    // pub fn requires(&self) -> &HashSet<Requirement> {
+    //     &self.desc.requires
+    // }
 
-    pub fn verify<P: AsRef<Path>>(
-        &self,
-        path: P,
-    ) -> io::Result<(bool, BTreeMap<Tree, ObjectId>, BTreeMap<Blob, ObjectId>)> {
-        let PackageHash { root, trees, blobs } = PackageHash::from_path(path, &self.desc.name)?;
-        debug!("Calculated root {root}");
+    // pub fn verify<P: AsRef<Path>>(
+    //     &self,
+    //     path: P,
+    // ) -> io::Result<(bool, BTreeMap<Tree, ObjectId>, BTreeMap<Blob, ObjectId>)> {
+    //     let PackageHash { root, trees, blobs } = PackageHash::from_path(path, &self.desc.name)?;
+    //     debug!("Calculated root {root}");
 
-        Ok((self.id == root, trees, blobs))
-    }
+    //     Ok((self.id == root, trees, blobs))
+    // }
 
-    pub fn path_in_store<P: AsRef<Path>>(&self, store_path: P) -> PathBuf {
-        let name_version_id = format!("{}-{}-{}", self.desc.name, self.desc.version, self.id);
+    pub fn path_in_store<P: AsRef<Path>>(&self, store_path: P, id: PackageId) -> PathBuf {
+        let name_version_id = format!("{}-{}-{}", self.desc.name, self.desc.version, id);
         store_path.as_ref().join(name_version_id)
     }
 
-    pub fn relative_path(&self) -> RelativePathBuf {
-        format!("{}-{}-{}", self.desc.name, self.desc.version, self.id).into()
-    }
+    // pub fn relative_path(&self) -> RelativePathBuf {
+    //     format!("{}-{}-{}", self.desc.name, self.desc.version, self.id).into()
+    // }
 }
 
-impl fmt::Display for Package {
+impl fmt::Display for PackageSource {
+    // fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    //     write!(f, "{:x} {}", style(self.id.truncate()).blue(), self.desc)
+    // }
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:x} {}", style(self.id.truncate()).blue(), self.desc)
+        write!(
+            f,
+            "Path: {:?}\nDerivation: {}\nDescription: {}",
+            self.path, self.drv, self.desc
+        )
     }
 }
 
-impl AsRef<PackageDesc> for Package {
+impl AsRef<PackageDesc> for PackageSource {
     fn as_ref(&self) -> &PackageDesc {
         &self.desc
     }
@@ -134,9 +149,9 @@ impl Packages {
         Self::default()
     }
 
-    pub fn contains_package(&self, package: &Package) -> bool {
-        self.nodes.contains_key(&package.id)
-    }
+    // pub fn contains_package(&self, package: &PackageSource) -> bool {
+    //     self.nodes.contains_key(&package.id)
+    // }
 
     pub fn contains(&self, id: &PackageId) -> bool {
         self.nodes.contains_key(id)

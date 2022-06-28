@@ -5,6 +5,7 @@ use std::any::Any;
 pub struct MemoryBackend {
     objects: Objects,
     packages: Packages,
+    derivations: Derivations,
 }
 
 impl ReadBackend for MemoryBackend {
@@ -21,6 +22,10 @@ impl ReadBackend for MemoryBackend {
     fn packages(&self) -> &Packages {
         &self.packages
     }
+
+    fn derivations(&self) -> &Derivations {
+        &self.derivations
+    }
 }
 
 impl WriteBackend for MemoryBackend {
@@ -30,6 +35,7 @@ impl WriteBackend for MemoryBackend {
         Ok(Self {
             objects: Objects::new(),
             packages: Packages::new(),
+            derivations: Derivations::new(),
         })
     }
 
@@ -39,6 +45,10 @@ impl WriteBackend for MemoryBackend {
 
     fn packages_mut(&mut self) -> &mut Packages {
         &mut self.packages
+    }
+
+    fn derivations_mut(&mut self) -> &mut Derivations {
+        &mut self.derivations
     }
 
     fn flush(self) -> StoreResult<()> {

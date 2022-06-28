@@ -2,7 +2,6 @@
 #![feature(let_chains)]
 #![feature(slice_pattern)]
 #![feature(assert_matches)]
-#![feature(explicit_generic_args_with_impl_trait)]
 #![feature(c_size_t)]
 #![feature(unix_chown)]
 

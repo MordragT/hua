@@ -1,9 +1,10 @@
 use crate::{
     dependency::Requirement,
-    extra::hash::PackageHash,
     store::{
+        derivation::Derivation,
+        id::PackageId,
         object::Blob,
-        package::{Package, PackageDesc},
+        package::{PackageDesc, PackageSource},
     },
 };
 use relative_path::RelativePathBuf;
@@ -21,7 +22,7 @@ pub fn pkg_req_ver_prov<P: AsRef<Path>>(
     requires: impl IntoIterator<Item = Requirement>,
     version: &str,
     provides: &str,
-) -> Package {
+) -> PackageSource {
     let path = path.as_ref();
     let package_lib_path = path.join("lib");
     fs::create_dir_all(&package_lib_path).unwrap();
@@ -31,25 +32,26 @@ pub fn pkg_req_ver_prov<P: AsRef<Path>>(
 
     let _lib = File::create(&lib_path).unwrap();
 
-    let PackageHash {
-        root,
-        trees: _,
-        blobs: _,
-    } = PackageHash::from_path(path, name).unwrap();
+    // let PackageHash {
+    //     root,
+    //     trees: _,
+    //     blobs: _,
+    // } = PackageHash::from_path(path, name).unwrap();
+
+    let drv = Derivation::new(requires);
 
     let desc = PackageDesc::new(
         name.to_owned(),
         "Some package".to_owned(),
         Version::parse(version).unwrap(),
         vec!["MIT".to_owned()],
-        requires.into_iter().collect(),
     );
 
-    Package::new(root, desc)
+    PackageSource::new(drv, desc, path.to_owned())
 }
 
 #[allow(dead_code)]
-pub fn pkg_prov<P: AsRef<Path>>(name: &str, path: P, provides: &str) -> Package {
+pub fn pkg_prov<P: AsRef<Path>>(name: &str, path: P, provides: &str) -> PackageSource {
     pkg_req_ver_prov(name, path, [], "1.0.0", provides)
 }
 
@@ -58,17 +60,17 @@ pub fn pkg_req<P: AsRef<Path>>(
     name: &str,
     path: P,
     requires: impl IntoIterator<Item = Requirement>,
-) -> Package {
+) -> PackageSource {
     pkg_req_ver_prov(name, path, requires, "1.0.0", name)
 }
 
 #[allow(dead_code)]
-pub fn pkg<P: AsRef<Path>>(name: &str, path: P) -> Package {
+pub fn pkg<P: AsRef<Path>>(name: &str, path: P) -> PackageSource {
     pkg_req(name, path, BTreeSet::new())
 }
 
 #[allow(dead_code)]
-pub fn pkg_ver<P: AsRef<Path>>(name: &str, path: P, version: &str) -> Package {
+pub fn pkg_ver<P: AsRef<Path>>(name: &str, path: P, version: &str) -> PackageSource {
     pkg_req_ver_prov(name, path, [], version, name)
 }
 

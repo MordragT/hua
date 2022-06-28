@@ -34,6 +34,10 @@ pub enum RecipeError {
     MissingJail,
     #[snafu(display("Missing temp dir, fetch first"))]
     MissingTempDir,
+    #[snafu(display("Missing package source files, build first"))]
+    MissingPackageSource,
+    #[snafu(display("Target dir not found, build first"))]
+    MissingTargetDir,
     #[snafu(display("The recipe is not compatible with your architecture"))]
     IncompatibleArchitecture,
     #[snafu(display("The recipe is not compatible with your platform"))]

@@ -14,7 +14,7 @@ use hua_core::{
     shell::ShellBuilder,
     store::{
         locator::{Locator, Source},
-        package::Package,
+        package::PackageSource,
         LocalStore, STORE_PATH,
     },
     url::Url,
@@ -189,7 +189,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 };
 
                 let lock_data = fs::read(lock_file)?;
-                let package = toml::from_slice::<Package>(&lock_data)?;
+                let package = toml::from_slice::<PackageSource>(&lock_data)?;
 
                 info!("Package lock and content read");
 
@@ -320,7 +320,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 if let Source::Remote { base, objects } = source && !store.packages().contains(&id) {
                     let cache = CacheBuilder::default().build()?;
-                    let package = Package::new(id, desc.clone());
+                    let package = PackageSource::new(id, desc.clone());
 
                     let absolute = package.relative_path().to_path(REMOTE_TMP);
                     

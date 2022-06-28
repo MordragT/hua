@@ -1,7 +1,7 @@
 use self::{
     id::{ObjectId, PackageId},
     object::{Object, ObjectKind},
-    package::Package,
+    package::PackageSource,
 };
 use snafu::prelude::*;
 use std::path::PathBuf;
@@ -9,6 +9,7 @@ use std::path::PathBuf;
 pub use store::*;
 
 pub mod backend;
+pub mod derivation;
 pub mod id;
 pub mod locator;
 pub mod object;
@@ -59,7 +60,7 @@ pub enum StoreError {
     #[snafu(display("Waldir Error: {source}"))]
     WalkDirError { source: walkdir::Error },
     #[snafu(display("Package could not be verified: {package}"))]
-    PackageNotVerified { package: Package },
+    PackageNotVerified { package: PackageSource },
     #[snafu(display("Packge could not be found for {id}"))]
     PackageNotFoundById { id: PackageId },
     #[snafu(display("Object vould not be found for {id}"))]

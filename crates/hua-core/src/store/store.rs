@@ -1,19 +1,26 @@
 use super::{
     backend::{LocalBackend, MemoryBackend, ReadBackend, RemoteBackend, WriteBackend},
+    derivation::{Derivation, Derivations},
     object::{Blob, Objects},
     package::{PackageDesc, Packages},
     *,
 };
 use crate::{
     dependency::Requirement,
-    extra::{path::ComponentPathBuf, style::ProgressBar},
+    extra::{
+        hash::{Blake3, PackageHash},
+        path::ComponentPathBuf,
+        style::ProgressBar,
+    },
     user::UserManager,
     GID, UID,
 };
 use log::{info, warn};
+use rs_merkle::Hasher;
 use std::{
     collections::HashSet,
     fs::{self},
+    ops::Deref,
     os::unix::{self},
     path::{Path, PathBuf},
 };
@@ -178,6 +185,10 @@ impl<S, B: ReadBackend, const BAR: bool> Store<S, B, BAR> {
         self.backend.objects()
     }
 
+    pub fn derivations(&self) -> &Derivations {
+        self.backend.derivations()
+    }
+
     pub fn matches<'a>(
         &'a self,
         requirement: &'a Requirement,
@@ -186,6 +197,7 @@ impl<S, B: ReadBackend, const BAR: bool> Store<S, B, BAR> {
             &'a PackageId,
             &'a PackageDesc,
             impl Iterator<Item = &'a Blob>,
+            &'a Derivation,
         ),
     > + '_ {
         self.packages()
@@ -197,7 +209,10 @@ impl<S, B: ReadBackend, const BAR: bool> Store<S, B, BAR> {
 
                 let blobs = self.objects().get_blobs_cloned(objects).collect();
                 if requirement.blobs().is_subset(&blobs) {
-                    Some((id, desc, self.objects().get_blobs(objects)))
+                    let drv_id = self.derivations().get_drv_of_pkg(id).unwrap();
+                    let drv = self.derivations().get(&drv_id).unwrap();
+
+                    Some((id, desc, self.objects().get_blobs(objects), drv))
                 } else {
                     None
                 }
@@ -246,6 +261,10 @@ impl<S, B: WriteBackend, const BAR: bool> Store<S, B, BAR> {
     pub fn packages_mut(&mut self) -> &mut Packages {
         self.backend.packages_mut()
     }
+
+    pub fn derivations_mut(&mut self) -> &mut Derivations {
+        self.backend.derivations_mut()
+    }
 }
 
 impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BAR: bool>
@@ -263,36 +282,43 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
 
     /// Inserts a package into the store and returns true if the package was not present and was inserted
     /// and false if it was already present.
-    pub fn insert<P: AsRef<Path>>(&mut self, package: Package, path: P) -> StoreResult<bool> {
-        let (verified, trees, blobs) = package.verify(&path).context(VerifyIoSnafu)?;
+    pub fn insert(&mut self, source: PackageSource) -> StoreResult<Option<PathBuf>> {
+        // let (verified, trees, blobs) = package.verify(&path).context(VerifyIoSnafu)?;
 
-        if !verified {
-            return Err(StoreError::PackageNotVerified { package });
-        }
+        // if !verified {
+        //     return Err(StoreError::PackageNotVerified { package });
+        // }
 
-        info!("Verified {package}");
+        // info!("Verified {package}");
 
-        let path_in_store = package.path_in_store(&self.source);
+        let PackageSource { desc, drv, path } = source;
+
+        let PackageHash {
+            root: package_id,
+            trees,
+            blobs,
+        } = PackageHash::from_path(&path, &desc.name).context(IoSnafu)?;
+
+        let path_in_store = desc.path_in_store(&self.source, package_id);
         fs::create_dir(&path_in_store).context(IoSnafu)?;
         unix::fs::chown(&path_in_store, UID, GID).context(IoSnafu)?;
 
         info!("Created {path_in_store:?}");
 
-        let Package {
-            id: package_id,
-            desc,
-        } = package;
+        // let Package {
+        //     id: package_id,
+        //     desc,
+        // } = package;
 
         let PackageDesc {
             name,
             desc,
             version,
             licenses,
-            requires,
         } = desc;
 
         if self.packages().contains(&package_id) {
-            Ok(false)
+            Ok(None)
         } else {
             let mut object_ids: HashSet<ObjectId> = HashSet::new();
 
@@ -359,22 +385,28 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
                 .packages_mut()
                 .insert(
                     package_id,
-                    PackageDesc::new(name, desc, version, licenses, requires),
+                    PackageDesc::new(name, desc, version, licenses),
                     object_ids
                 )
                 .is_none());
 
-            Ok(true)
+            let drv_id = package_id.into();
+            let mut provides = HashSet::new();
+            provides.insert(package_id);
+            assert!(self
+                .derivations_mut()
+                .insert(drv_id, drv, provides)
+                .is_none());
+
+            Ok(Some(path_in_store))
         }
     }
 
-    pub fn extend<'a, P: AsRef<Path>>(
+    pub fn extend<'a>(
         &'a mut self,
-        packages: impl IntoIterator<Item = (Package, P)> + 'a,
-    ) -> impl Iterator<Item = StoreResult<bool>> + 'a {
-        packages
-            .into_iter()
-            .map(|(package, path)| self.insert(package, path))
+        packages: impl IntoIterator<Item = PackageSource> + 'a,
+    ) -> impl Iterator<Item = StoreResult<Option<PathBuf>>> + 'a {
+        packages.into_iter().map(|src| self.insert(src))
     }
 
     /// Remove all packages that are currently unused in all generations.
@@ -448,7 +480,11 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
 #[cfg(test)]
 mod tests {
     use super::{LocalStore, PACKAGES_DB};
-    use crate::{extra::path::ComponentPathBuf, support::*, user::UserManager};
+    use crate::{
+        extra::{hash, path::ComponentPathBuf},
+        support::*,
+        user::UserManager,
+    };
     use std::{fs, path::Path};
     use temp_dir::TempDir;
 
@@ -508,9 +544,10 @@ mod tests {
 
         let mut store = store_create_at_path(&path);
         let package = pkg("package", &package_path);
-        let package_store_path = package.path_in_store(store.path());
+        let package_id = hash::root_hash(&package).unwrap();
+        let package_store_path = package.path_in_store(store.path(), package_id);
 
-        let _ = store.insert(package, package_path).unwrap();
+        let _ = store.insert(package).unwrap();
 
         assert!(package_store_path.exists());
         assert!(package_store_path.is_dir());
@@ -533,11 +570,11 @@ mod tests {
         let one = pkg("one", &one_path);
         let two = pkg("two", &two_path);
 
-        let two_id = two.id;
+        let two_id = hash::root_hash(&two).unwrap();
         let one_req = req("one", ">0.0.0");
 
-        store.insert(one, one_path).unwrap();
-        store.insert(two, two_path).unwrap();
+        store.insert(one).unwrap();
+        store.insert(two).unwrap();
 
         let mut user_manager = UserManager::init(&user_manager_path).unwrap();
         assert!(user_manager
@@ -573,10 +610,10 @@ mod tests {
         let mut store = store_create_at_path(&path);
 
         let package = pkg("package", &package_path);
-        let _package_store_path = package.path_in_store(store.path());
-        let package_id = package.id;
+        let package_id = hash::root_hash(&package).unwrap();
+        let _package_store_path = package.path_in_store(store.path(), package_id);
 
-        let _ = store.insert(package, package_path).unwrap();
+        let _ = store.insert(package).unwrap();
 
         let global_temp_path = temp_dir.child("global");
         fs::create_dir(&global_temp_path).unwrap();

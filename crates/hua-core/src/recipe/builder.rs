@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     dependency::Requirement,
     recipe::Recipe,
-    store::{backend::ReadBackend, package::Package, Store},
+    store::{backend::ReadBackend, package::PackageSource, LocalStore, Store},
 };
 use cached_path::Cache;
 use relative_path::RelativePathBuf;
@@ -26,11 +26,11 @@ pub struct RecipeData {
     pub target_dir: RelativePathBuf,
 }
 
-pub fn build_recipe<B: ReadBackend<Source = PathBuf>>(
+pub fn build_recipe(
     data: RecipeData,
-    store: &Store<PathBuf, B>,
+    store: &mut LocalStore,
     cache: &Cache,
-) -> RecipeResult<(Package, PathBuf)> {
+) -> RecipeResult<Option<PathBuf>> {
     let RecipeData {
         name,
         version,
@@ -62,5 +62,6 @@ pub fn build_recipe<B: ReadBackend<Source = PathBuf>>(
     recipe
         .fetch(&cache)?
         .prepare_requirements(&store, vars.into_iter())?
-        .build(script)
+        .build(script)?
+        .install(store)
 }

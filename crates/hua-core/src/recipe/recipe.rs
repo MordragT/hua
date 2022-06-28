@@ -5,9 +5,10 @@ use crate::{
     jail::{Bind, JailBuilder},
     shell::ShellBuilder,
     store::{
-        backend::ReadBackend,
-        package::{Package, PackageDesc},
-        Store,
+        backend::{ReadBackend, WriteBackend},
+        derivation::Derivation,
+        package::{PackageDesc, PackageSource},
+        LocalStore, Store,
     },
 };
 use cached_path::{Cache, Options};
@@ -15,6 +16,7 @@ use fs_extra::dir::CopyOptions;
 use log::{debug, info};
 use relative_path::RelativePathBuf;
 use semver::Version;
+use snafu::ResultExt;
 use std::{collections::HashSet, fs::File, io::Write, os::unix, path::PathBuf};
 use temp_dir::TempDir;
 
@@ -40,6 +42,7 @@ pub struct Recipe {
     shell: Option<ShellBuilder>,
     build_dir: Option<PathBuf>,
     temp_dir: Option<TempDir>,
+    absolute_target_dir: Option<PathBuf>,
 }
 
 impl Recipe {
@@ -71,6 +74,7 @@ impl Recipe {
             shell: None,
             build_dir: None,
             temp_dir: None,
+            absolute_target_dir: None,
         }
     }
 
@@ -84,16 +88,16 @@ impl Recipe {
 
         info!("Checked architecture and platform");
 
-        let lock_path = PathBuf::from(format!("{}.lock", self.name));
-        if lock_path.exists() {
-            return Err(RecipeError::LockFileExists { path: lock_path });
-        }
+        // let lock_path = PathBuf::from(format!("{}.lock", self.name));
+        // if lock_path.exists() {
+        //     return Err(RecipeError::LockFileExists { path: lock_path });
+        // }
         let link = PathBuf::from("result");
         if link.exists() {
             return Err(RecipeError::ResultLinkExists);
         }
 
-        info!("Checked lock file and result link");
+        info!("Checked result link");
 
         let path = cache
             .cached_path_with_options(&self.source, &Options::default().extract())
@@ -162,18 +166,16 @@ impl Recipe {
 
     /// Builds the recipe.
     /// In here external programs like cargo or make are run.
-    pub fn build(self, script: String) -> RecipeResult<(Package, PathBuf)> {
+    pub fn build(mut self, script: String) -> RecipeResult<Self> {
         let jail = self.jail.ok_or(RecipeError::MissingJail)?;
         let build_dir = self.build_dir.ok_or(RecipeError::MissingSourceFiles)?;
-        let temp_dir = self.temp_dir.ok_or(RecipeError::MissingTempDir)?;
+        let temp_dir = self.temp_dir.as_ref().ok_or(RecipeError::MissingTempDir)?;
 
         let script_path = temp_dir.child(&self.name);
         let mut script_file = File::create(&script_path).context(IoSnafu)?;
         script_file.write(script.as_bytes()).context(IoSnafu)?;
 
         debug!("Written temprorary script file {script_path:?}");
-
-        temp_dir.leak();
 
         let mut process = jail
             .bind(Bind::read_only(script_path, BUILD_SCRIPT_PATH))
@@ -190,37 +192,53 @@ impl Recipe {
 
         debug!("Calculated absolute dir {absolute_target_dir:?}");
 
-        let PackageHash {
-            root,
-            trees: _,
-            blobs: _,
-        } = PackageHash::from_path(&absolute_target_dir, &self.name).context(IoSnafu)?;
+        // let PackageHash {
+        //     root,
+        //     trees: _,
+        //     blobs: _,
+        // } = PackageHash::from_path(&absolute_target_dir, &self.name).context(IoSnafu)?;
 
-        debug!("Calculated package id");
+        // debug!("Calculated package id");
 
-        let desc = PackageDesc::new(
-            self.name,
-            self.desc,
-            self.version,
-            self.licenses,
-            self.requires,
-        );
-        let package = Package::new(root, desc);
+        // let toml = toml::to_vec(&package).context(TomlSerilizationSnafu)?;
 
-        let toml = toml::to_vec(&package).context(TomlSerilizationSnafu)?;
+        // let lock_path = PathBuf::from(format!("{}.lock", package.name()));
+        // let mut lock = File::create(&lock_path).context(IoSnafu)?;
+        // lock.write_all(&toml).context(IoSnafu)?;
 
-        let lock_path = PathBuf::from(format!("{}.lock", package.name()));
-        let mut lock = File::create(&lock_path).context(IoSnafu)?;
-        lock.write_all(&toml).context(IoSnafu)?;
+        // info!("Created lock: {lock_path:?}");
 
-        info!("Created lock: {lock_path:?}");
+        // let link = PathBuf::from("result");
+        // unix::fs::symlink(&absolute_target_dir, link).context(IoSnafu)?;
 
-        let link = PathBuf::from("result");
-        unix::fs::symlink(&absolute_target_dir, link).context(IoSnafu)?;
+        // info!("Created result link");
 
-        info!("Created result link");
+        // Ok((package, absolute_target_dir))
 
-        Ok((package, absolute_target_dir))
+        self.build_dir = None;
+        self.jail = None;
+        self.absolute_target_dir = Some(absolute_target_dir);
+        Ok(self)
+    }
+
+    pub fn install(self, store: &mut LocalStore) -> RecipeResult<Option<PathBuf>> {
+        let absolute_target_dir = self
+            .absolute_target_dir
+            .ok_or(RecipeError::MissingTargetDir)?;
+        let drv = Derivation::new(self.requires);
+        let desc = PackageDesc::new(self.name, self.desc, self.version, self.licenses);
+        let package_source = PackageSource::new(drv, desc, absolute_target_dir);
+
+        if let Some(path) = store.insert(package_source).context(StoreSnafu)? {
+            let link = PathBuf::from("result");
+            unix::fs::symlink(&path, &link).context(IoSnafu)?;
+
+            info!("Created result link");
+
+            Ok(Some(link))
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -274,14 +292,16 @@ mod tests {
         fs::create_dir(&recipe_path).unwrap();
         std::env::set_current_dir(recipe_path).unwrap();
 
-        let (package, path) = recipe
+        let path = recipe
             .fetch(&cache)
             .unwrap()
             .prepare_requirements::<LocalBackend, &str, &str>(&store, [])
             .unwrap()
             .build("ls".to_owned())
+            .unwrap()
+            .install(&mut store)
             .unwrap();
 
-        assert!(store.insert(package, path).unwrap());
+        assert!(path.is_some());
     }
 }
