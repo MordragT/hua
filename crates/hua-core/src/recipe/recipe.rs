@@ -1,8 +1,8 @@
 use super::*;
 use crate::{
     dependency::Requirement,
+    env::{Bind, Environment},
     extra::hash::PackageHash,
-    jail::{Bind, JailBuilder},
     shell::ShellBuilder,
     store::{
         backend::ReadBackend,
@@ -36,7 +36,7 @@ pub struct Recipe {
     requires: HashSet<Requirement>,
     requires_build: HashSet<Requirement>,
     target_dir: RelativePathBuf,
-    jail: Option<JailBuilder>,
+    environment: Option<Environment>,
     shell: Option<ShellBuilder>,
     build_dir: Option<PathBuf>,
     temp_dir: Option<TempDir>,
@@ -67,7 +67,7 @@ impl Recipe {
             requires,
             requires_build,
             target_dir,
-            jail: None,
+            environment: None,
             shell: None,
             build_dir: None,
             temp_dir: None,
@@ -121,11 +121,16 @@ impl Recipe {
 
     /// Link all dependencies temporarily and processes binaries
     /// for execution in the build phase.
-    pub fn prepare_requirements<B: ReadBackend<Source = PathBuf>, L: AsRef<str>, R: AsRef<str>>(
+    pub fn prepare_requirements<B, L, R>(
         mut self,
         store: &Store<PathBuf, B>,
         vars: impl IntoIterator<Item = (L, R)>,
-    ) -> RecipeResult<Self> {
+    ) -> RecipeResult<Self>
+    where
+        B: ReadBackend<Source = PathBuf>,
+        L: AsRef<str>,
+        R: AsRef<str>,
+    {
         let build_dir = self
             .build_dir
             .as_ref()
@@ -137,12 +142,14 @@ impl Recipe {
             .into_iter()
             .chain(self.requires_build.clone().into_iter());
 
-        let jail = JailBuilder::new()
+        let mut environment = Environment::new();
+
+        environment
             .bind(Bind::read_write(&build_dir, BUILD_PATH))
             .envs(vars)
             .current_dir(BUILD_PATH);
 
-        info!("Created jail");
+        info!("Created environment");
 
         let shell = ShellBuilder::new()
             .context(ShellSnafu)?
@@ -151,19 +158,19 @@ impl Recipe {
 
         info!("Created shell env");
 
-        let jail = shell.apply(jail).context(ShellSnafu)?;
+        shell.apply(&mut environment).context(ShellSnafu)?;
 
-        info!("Applied shell env to jail");
+        info!("Applied shell env to environment");
 
         self.shell = Some(shell);
-        self.jail = Some(jail);
+        self.environment = Some(environment);
         Ok(self)
     }
 
     /// Builds the recipe.
     /// In here external programs like cargo or make are run.
     pub fn build(self, script: String) -> RecipeResult<(Package, PathBuf)> {
-        let jail = self.jail.ok_or(RecipeError::MissingJail)?;
+        let mut environment = self.environment.ok_or(RecipeError::MissingEnvironment)?;
         let build_dir = self.build_dir.ok_or(RecipeError::MissingSourceFiles)?;
         let temp_dir = self.temp_dir.ok_or(RecipeError::MissingTempDir)?;
 
@@ -175,11 +182,11 @@ impl Recipe {
 
         temp_dir.leak();
 
-        let mut process = jail
+        let mut process = environment
             .bind(Bind::read_only(script_path, BUILD_SCRIPT_PATH))
-            .arg("sh")
+            .build_jail("sh")
             .arg(BUILD_SCRIPT_PATH)
-            .run()
+            .spawn()
             .context(IoSnafu)?;
         let ecode = process.wait().context(IoSnafu)?;
         assert!(ecode.success());

@@ -77,7 +77,7 @@ impl fmt::Display for Requirement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{} {}\ncomponents: {:#?}\n",
+            "{} {}\ncomponents: {:#?}",
             style(&self.name).green(),
             self.version_req,
             self.blobs

@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 // TODO: Tests
 
+/// A Builder for a [Generation].
 #[derive(Debug)]
 pub struct GenerationBuilder {
     id: usize,
@@ -19,6 +20,7 @@ pub struct GenerationBuilder {
 }
 
 impl GenerationBuilder {
+    /// Creates a new [GenerationBuilder] with the specified id.
     pub fn new(id: usize) -> Self {
         Self {
             id,
@@ -28,16 +30,19 @@ impl GenerationBuilder {
         }
     }
 
+    /// Specifies the [Path] where to create the [Generation].
     pub fn under<P: AsRef<Path>>(mut self, base: P) -> Self {
         self.base = Some(base.as_ref().to_owned());
         self
     }
 
+    /// Specifies the [requirements](Requirement) of the [Generation].
     pub fn requires(mut self, requirements: impl IntoIterator<Item = Requirement>) -> Self {
         self.requirements = Some(requirements.into_iter().collect());
         self
     }
 
+    /// Resolves the [requirements](Requirement) with the specified [Store].
     pub fn resolve<S, B: ReadBackend>(mut self, store: &Store<S, B>) -> GenerationResult<Self> {
         let reqs = self
             .requirements
@@ -59,6 +64,7 @@ impl GenerationBuilder {
         Ok(self)
     }
 
+    /// Builds the [Generation] by linking all [packages](crate::store::Package) into the [Generation].
     pub fn build<B: ReadBackend<Source = PathBuf>>(
         self,
         store: &Store<PathBuf, B>,
@@ -80,12 +86,7 @@ impl GenerationBuilder {
             return Err(GenerationError::AlreadyPresent { id: self.id });
         }
         fs::create_dir(&path).context(GenerationIoSnafu { id: self.id })?;
-        let component_paths = ComponentPathBuf::new(
-            path.join("bin"),
-            path.join("cfg"),
-            path.join("lib"),
-            path.join("share"),
-        );
+        let component_paths = ComponentPathBuf::from_path(&path);
         component_paths
             .create_dirs(false)
             .context(GenerationIoSnafu { id: self.id })?;
@@ -102,6 +103,7 @@ impl GenerationBuilder {
         ))
     }
 
+    /// Builds an empty [Generation] without any linked [packages](crate::store::Package).
     pub fn empty(self) -> GenerationResult<Generation> {
         let base = self
             .base

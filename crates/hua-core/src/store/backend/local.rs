@@ -8,6 +8,7 @@ use std::{
     path::PathBuf,
 };
 
+/// A local [ReadBackend] and [WriteBackend] which can be opened and initialised by [PathBuf].
 #[derive(Debug)]
 pub struct LocalBackend {
     path: PathBuf,

@@ -19,15 +19,19 @@ use std::{
 };
 use url::Url;
 
-/// The filename of the packages database of the store
+/// The filename of the packages database of the store.
 const PACKAGES_DB: &str = "packages.db";
+/// The path where the [Store] should be placed.
 pub const STORE_PATH: &str = "/hua/store/";
 
+/// A local [Store] for all offline operations.
 pub type LocalStore = Store<PathBuf, LocalBackend>;
+/// A readonly remote [Store] to retrieve [packages](Package).
 pub type RemoteStore = Store<Url, RemoteBackend>;
+/// An in-memory [Store] for testing purposes.
 pub type MemoryStore = Store<(), MemoryBackend>;
 
-/// A Store that contains all the packages installed by any user
+/// A Store that contains all the [packages](Package) installed by any user.
 /// Content Addressable Store
 #[derive(Debug)]
 pub struct Store<S, B, const BAR: bool = true> {
@@ -36,12 +40,14 @@ pub struct Store<S, B, const BAR: bool = true> {
 }
 
 impl<B> Store<Url, B> {
+    /// Returns the [Url] of the [Store].
     pub fn url(&self) -> &Url {
         &self.source
     }
 }
 
 impl Store<(), MemoryBackend> {
+    /// Initialises an in-memory [Store].
     pub fn init() -> StoreResult<Self> {
         let backend = MemoryBackend::init(Box::new(()))?;
         Ok(Self {
@@ -52,6 +58,7 @@ impl Store<(), MemoryBackend> {
 }
 
 impl<B: ReadBackend<Source = Url>> Store<Url, B> {
+    /// Opens a remote [Store] by the specified [Url].
     pub fn open(url: Url) -> StoreResult<Self> {
         let packages_db_url = url.join(PACKAGES_DB).context(UrlParseSnafu)?;
         let backend = B::open(packages_db_url)?;
@@ -64,6 +71,7 @@ impl<B: ReadBackend<Source = Url>> Store<Url, B> {
 }
 
 impl<B> Store<PathBuf, B> {
+    /// Returns the [Path] where the [Store] is located.
     pub fn path(&self) -> &Path {
         &self.source
     }
@@ -170,14 +178,17 @@ impl<B: WriteBackend<Source = PathBuf>> Store<PathBuf, B> {
 }
 
 impl<S, B: ReadBackend, const BAR: bool> Store<S, B, BAR> {
+    /// Returns a reference to the [Packages] data structure, for [Package] operations.
     pub fn packages(&self) -> &Packages {
         self.backend.packages()
     }
 
+    /// Returns a reference to the [Objects] data structure, for [Objects] operations.
     pub fn objects(&self) -> &Objects {
         self.backend.objects()
     }
 
+    /// Returns all matches found for the specified [Requirement].
     pub fn matches<'a>(
         &'a self,
         requirement: &'a Requirement,
@@ -195,18 +206,19 @@ impl<S, B: ReadBackend, const BAR: bool> Store<S, B, BAR> {
             .filter_map(|(id, desc, objects)| {
                 // TODO find a way to not get blobs two times
 
-                let blobs = self.objects().get_blobs_cloned(objects).collect();
+                let blobs = self.objects().get_multiple_blobs_cloned(objects).collect();
                 if requirement.blobs().is_subset(&blobs) {
-                    Some((id, desc, self.objects().get_blobs(objects)))
+                    Some((id, desc, self.objects().get_multiple_blobs(objects)))
                 } else {
                     None
                 }
             })
     }
 
+    /// Checks if the specified [PackageId] fulfills the [Requirement].
     pub fn is_matching(&self, package_id: &PackageId, requirement: &Requirement) -> bool {
         if let Some((desc, objects)) = self.packages().get_full(package_id) {
-            let blobs = self.objects().get_blobs_cloned(objects).collect();
+            let blobs = self.objects().get_multiple_blobs_cloned(objects).collect();
             requirement.blobs().is_subset(&blobs)
                 && requirement.name() == &desc.name
                 && requirement.version_req().matches(&desc.version)
@@ -215,23 +227,25 @@ impl<S, B: ReadBackend, const BAR: bool> Store<S, B, BAR> {
         }
     }
 
-    pub fn get_blobs_of_package<'a>(
+    /// Get all references to [blobs](Blob) of a [PackageId].
+    pub fn blobs_of_package<'a>(
         &'a self,
         package_id: &PackageId,
     ) -> Option<impl Iterator<Item = &'a Blob>> {
         if let Some(objects) = self.packages().get_children(package_id) {
-            Some(self.objects().get_blobs(objects))
+            Some(self.objects().get_multiple_blobs(objects))
         } else {
             None
         }
     }
 
-    pub fn get_blobs_cloned_of_package(
+    /// Get all cloned [blobs](Blob) of a [PackageId].
+    pub fn blobs_cloned_of_package(
         &self,
         package_id: &PackageId,
     ) -> Option<impl Iterator<Item = Blob> + '_> {
         if let Some(objects) = self.packages().get_children(package_id) {
-            Some(self.objects().get_blobs_cloned(objects))
+            Some(self.objects().get_multiple_blobs_cloned(objects))
         } else {
             None
         }
@@ -239,10 +253,14 @@ impl<S, B: ReadBackend, const BAR: bool> Store<S, B, BAR> {
 }
 
 impl<S, B: WriteBackend, const BAR: bool> Store<S, B, BAR> {
+    /// Returns a mutable reference the [Objects] data structure,
+    /// for mutable [Object] operations.
     pub fn objects_mut(&mut self) -> &mut Objects {
         self.backend.objects_mut()
     }
 
+    /// Returns a mutable reference the [Packages] data structure,
+    /// for mutable [Package] operations.
     pub fn packages_mut(&mut self) -> &mut Packages {
         self.backend.packages_mut()
     }
@@ -251,17 +269,7 @@ impl<S, B: WriteBackend, const BAR: bool> Store<S, B, BAR> {
 impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BAR: bool>
     Store<PathBuf, B, BAR>
 {
-    fn get_full_object_path(&self, object_id: &ObjectId) -> Option<PathBuf> {
-        if let Some(obj) = self.objects().get(&object_id) && let Some(package_id) = self.packages().find_package_id(object_id) {
-            let package_path = self.packages().path_in_store(&package_id, &self.source);
-
-            package_path.map(|path| obj.to_path(path))
-        } else {
-            None
-        }
-    }
-
-    /// Inserts a package into the store and returns true if the package was not present and was inserted
+    /// Inserts a [Package] into the [Store] and returns true if the [Package] was not present and was inserted
     /// and false if it was already present.
     pub fn insert<P: AsRef<Path>>(&mut self, package: Package, path: P) -> StoreResult<bool> {
         let (verified, trees, blobs) = package.verify(&path).context(VerifyIoSnafu)?;
@@ -368,6 +376,7 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
         }
     }
 
+    /// Extends the store by multiple [packages](Package).
     pub fn extend<'a, P: AsRef<Path>>(
         &'a mut self,
         packages: impl IntoIterator<Item = (Package, P)> + 'a,
@@ -402,7 +411,7 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
                     unsafe { self.packages_mut().remove(package_id).unwrap_unchecked() };
                 assert!(self
                     .objects_mut()
-                    .remove_objects(objects.iter())
+                    .remove_multiple(objects.iter())
                     .collect::<Option<Vec<_>>>()
                     .is_some());
 
@@ -423,7 +432,7 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
                     unsafe { self.packages_mut().remove(package_id).unwrap_unchecked() };
                 assert!(self
                     .objects_mut()
-                    .remove_objects(objects.iter())
+                    .remove_multiple(objects.iter())
                     .collect::<Option<Vec<_>>>()
                     .is_some());
             }
@@ -442,6 +451,16 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
         // fs::set_permissions(path, perm).context(IoSnafu)?;
 
         Ok(())
+    }
+
+    fn get_full_object_path(&self, object_id: &ObjectId) -> Option<PathBuf> {
+        if let Some(obj) = self.objects().get(&object_id) && let Some(package_id) = self.packages().find_package_id(object_id) {
+            let package_path = self.packages().path_in_store(&package_id, &self.source);
+
+            package_path.map(|path| obj.to_path(path))
+        } else {
+            None
+        }
     }
 }
 
@@ -541,6 +560,7 @@ mod tests {
 
         let mut user_manager = UserManager::init(&user_manager_path).unwrap();
         assert!(user_manager
+            .current_mut()
             .insert_requirement(one_req, &mut store)
             .unwrap());
 

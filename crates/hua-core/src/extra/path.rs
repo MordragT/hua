@@ -38,15 +38,26 @@ pub fn relative_path_between<P: AsRef<Path>, Q: AsRef<Path>>(
     RelativePathBuf::from_path(relative).map_err(|err| Error::new(ErrorKind::Other, err))
 }
 
+/// A Path of different components provided by a [crate::store::Package] or [crate::generation::Generation].
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ComponentPathBuf {
+    /// The binary path
     pub binary: PathBuf,
+    /// The config path
     pub config: PathBuf,
+    /// The library path
     pub library: PathBuf,
+    /// The share path
     pub share: PathBuf,
 }
 
 impl ComponentPathBuf {
+    /// Creates a [ComponentPathBuf] from a path
+    /// and creates the following component paths in there:
+    /// - binary: `bin`
+    /// - config: `cfg`
+    /// - library: `lib`
+    /// - share: `share`
     pub fn from_path<P: AsRef<Path>>(path: P) -> Self {
         let path = path.as_ref();
         Self {
@@ -57,6 +68,11 @@ impl ComponentPathBuf {
         }
     }
 
+    /// Creates a [ComponentPathBuf] with global components:
+    /// - binary: `/usr/bin`
+    /// - config: `/etc/`
+    /// - library: `/usr/lib`
+    /// - share: `/usr/share`
     pub fn global() -> Self {
         Self {
             binary: "/usr/bin".into(),
@@ -66,6 +82,7 @@ impl ComponentPathBuf {
         }
     }
 
+    /// Creates a new [ComponentPathBuf].
     pub fn new<T, U, V, W>(binary: T, config: U, library: V, share: W) -> Self
     where
         T: AsRef<Path>,
@@ -81,6 +98,8 @@ impl ComponentPathBuf {
         }
     }
 
+    /// Creates the directories specified by the [ComponentPathBuf].
+    /// If wanted those paths are then chowned by the [UID] and [GID].
     pub fn create_dirs(&self, chown: bool) -> io::Result<()> {
         if !self.binary.exists() {
             fs::create_dir(&self.binary)?;

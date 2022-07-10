@@ -42,8 +42,8 @@
       #   lib.makeLibraryPath
       #   [ pkg-config stdenv.cc.cc.lib libffi ncurses zlib ];
 
-      # for pam-client which uses bindgen source
-      # LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+      # bindgen
+      LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
 
       nativeBuildInputs = with pkgs; [
         (toolchain.withComponents [
@@ -53,6 +53,7 @@
         openssl
         pkgconfig
         bubblewrap
+        linuxHeaders
         # llvmPkgs.clang
         # llvmPkgs.lld
         # llvmPkgs.llvm.dev

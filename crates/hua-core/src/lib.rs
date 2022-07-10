@@ -1,3 +1,5 @@
+//! This is the core library for the hua package manager.
+
 #![warn(missing_docs)]
 #![feature(let_chains)]
 #![feature(slice_pattern)]
@@ -6,11 +8,17 @@
 #![feature(c_size_t)]
 #![feature(unix_chown)]
 
+#[allow(missing_docs)]
+#[deprecated]
 pub mod c_ffi;
+
+/// Operations and data structures for dependency resolution.
 pub mod dependency;
+pub mod env;
+/// Extra functions and data structures.
 pub mod extra;
+/// Operations and data structures for generation's.
 pub mod generation;
-pub mod jail;
 pub mod recipe;
 pub mod shell;
 pub mod store;

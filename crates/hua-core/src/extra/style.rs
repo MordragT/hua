@@ -2,11 +2,13 @@ use std::borrow::Cow;
 
 use indicatif::ProgressStyle;
 
+/// A styled [indicatif::ProgressBar].
 pub struct ProgressBar {
     bar: indicatif::ProgressBar,
 }
 
 impl ProgressBar {
+    /// Creates a new ProgressBar with the specified length
     pub fn new(len: u64) -> Self {
         let bar = indicatif::ProgressBar::new(len);
         bar.set_style(
@@ -17,10 +19,12 @@ impl ProgressBar {
         Self { bar }
     }
 
+    /// Increments the progress of the [ProgressBar] with the specified delta.
     pub fn inc(&mut self, delta: u64) {
         self.bar.inc(delta)
     }
 
+    /// Finishes the [ProgressBar] and shows the specified message.
     pub fn finish(&self, msg: impl Into<Cow<'static, str>>) {
         self.bar.set_message(msg);
         self.bar

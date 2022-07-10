@@ -1,9 +1,10 @@
 use super::{id::PackageId, package::PackageDesc, LocalStore, RemoteStore, StoreResult};
 use url::Url;
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub enum Source {
     Local,
-    Remote { base: Url, objects: Vec<Url> },
+    Remote { url: Url },
 }
 
 #[derive(Debug)]

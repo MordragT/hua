@@ -8,7 +8,9 @@ mod user;
 pub use manager::UserManager;
 pub use user::User;
 
+/// An [Error](std::error::Error) inside the [user](crate::user) module.
 #[derive(Debug, Snafu)]
+#[allow(missing_docs)]
 pub enum UserError {
     #[snafu(display("The username could not be found"))]
     UsernameNotFound,

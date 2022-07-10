@@ -9,6 +9,7 @@ use crate::extra::persist::Pot;
 
 use super::ReadBackend;
 
+/// A purely immutable [ReadBackend] for remote access of packages.
 #[derive(Debug)]
 pub struct RemoteBackend {
     objects: Objects,

@@ -9,11 +9,11 @@ use hua_core::{
     cache::{CacheBuilder},
     config::Config,
     extra::path::ComponentPathBuf,
-    jail::{Bind, JailBuilder},
+    env::{Bind, Environment},
     recipe::{self, RecipeData},
     shell::ShellBuilder,
     store::{
-        locator::{Locator, Source},
+        location::{Locator, Source},
         package::Package,
         LocalStore, STORE_PATH,
     },
@@ -220,7 +220,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
 
                 let user_manager = UserManager::open(USER_MANAGER_PATH)?;
-                user_manager.list_current_generations();
+                println!("{}", user_manager.current());
             }
             Some(("remove", sub_matches)) => {
                 if caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_OVERRIDE)?
@@ -237,7 +237,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .expect("When removing a generation, an id has to be given.")
                     .parse()?;
                 let mut user_manager = UserManager::open(USER_MANAGER_PATH)?;
-                user_manager.remove_generation(id)?;
+                user_manager.current_mut().remove_generation(id)?;
                 user_manager.flush()?;
 
                 println!("{} {id} removed", style("Success").green());
@@ -260,7 +260,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let global_paths = ComponentPathBuf::global();
 
                 let mut user_manager = UserManager::open(USER_MANAGER_PATH)?;
-                user_manager.switch_generation(id, &global_paths)?;
+                user_manager.current_mut().switch_generation(id, &global_paths)?;
                 user_manager.flush()?;
 
                 println!("{} switched to {id}", style("Success").green());
@@ -345,13 +345,15 @@ fn main() -> Result<(), Box<dyn Error>> {
                     store.insert(package, absolute)?;
                 }
 
-                let blobs = unsafe { store.get_blobs_cloned_of_package(&id).unwrap_unchecked() };
+                let blobs = unsafe { store.blobs_cloned_of_package(&id).unwrap_unchecked() };
                 let req = (desc, blobs.collect()).into();
 
-                user_manager.insert_requirement(req, &store)?;
+                let user = user_manager.current_mut();
+
+                user.insert_requirement(req, &store)?;
 
                 let global_paths = ComponentPathBuf::global();
-                user_manager.switch_global_links(&global_paths)?;
+                user.switch_global_links(&global_paths)?;
 
                 user_manager.flush()?;
 
@@ -376,8 +378,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             let store = LocalStore::open(STORE_PATH)?;
             let mut user_manager = UserManager::open(USER_MANAGER_PATH)?;
+            let user = user_manager.current_mut();
 
-            let (names, reqs): (Vec<_>, Vec<_>) = user_manager
+            let (names, reqs): (Vec<_>, Vec<_>) = user
                 .filter_requirements_by_name_containing(name)
                 .map(|req| {
                     (
@@ -396,10 +399,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let name = &names[selection];
                 let req = reqs[selection].clone();
 
-                user_manager.remove_requirement(&req, &store)?;
+                user.remove_requirement(&req, &store)?;
 
                 let global_paths = ComponentPathBuf::global();
-                user_manager.switch_global_links(&global_paths)?;
+                user.switch_global_links(&global_paths)?;
 
                 user_manager.flush()?;
                 println!("{} {name} removed", style("Success").green());
@@ -443,14 +446,22 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             let store = LocalStore::open(STORE_PATH)?;
 
-            let jail = JailBuilder::new()
+            let mut environment = Environment::new();
+            environment
                 .bind(Bind::read_write(&cwd, &cwd))
                 .current_dir(cwd);
 
-            let shell = ShellBuilder::new()?.with_names(names, &store)?;
-            let jail = shell.apply(jail)?;
+            let shell_builder = ShellBuilder::new()?.with_names(names, &store)?;
+            shell_builder.apply(&mut environment)?;
 
-            let mut child = jail.arg("sh").run()?;
+            println!("{shell_builder}\n");
+
+            let shell = match std::env::var("SHELL") {
+                Ok(s) => s,
+                Err(_) => "sh".to_owned(),
+            };
+
+            let mut child = environment.build_jail(shell).spawn()?;
             child.wait()?;
         }
         Some(("cache", sub_matches)) => match sub_matches.subcommand() {

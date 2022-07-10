@@ -10,7 +10,9 @@ use semver::Version;
 use serde::Deserialize;
 use std::{collections::HashSet, path::PathBuf};
 
+/// All data required to build a [Recipe] into a [Package].
 #[derive(Debug, Deserialize)]
+#[allow(missing_docs)]
 pub struct RecipeData {
     pub name: String,
     pub version: Version,
@@ -26,6 +28,7 @@ pub struct RecipeData {
     pub target_dir: RelativePathBuf,
 }
 
+/// Builds a [Recipe] with a [Store] into a [Package].
 pub fn build_recipe<B: ReadBackend<Source = PathBuf>>(
     data: RecipeData,
     store: &Store<PathBuf, B>,
@@ -61,6 +64,6 @@ pub fn build_recipe<B: ReadBackend<Source = PathBuf>>(
 
     recipe
         .fetch(&cache)?
-        .prepare_requirements(&store, vars.into_iter())?
+        .prepare_requirements(&store, vars)?
         .build(script)
 }

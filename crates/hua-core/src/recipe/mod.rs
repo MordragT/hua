@@ -9,7 +9,9 @@ pub use recipe::Recipe;
 mod builder;
 mod recipe;
 
+/// An [Error](std::error::Error) inside the [crate::recipe] module.
 #[derive(Debug, Snafu)]
+#[allow(missing_docs)]
 pub enum RecipeError {
     #[snafu(display("CacheError: {source}"))]
     CacheError { source: cached_path::Error },
@@ -31,7 +33,7 @@ pub enum RecipeError {
     #[snafu(display("Fetch the source files first"))]
     MissingSourceFiles,
     #[snafu(display("Prepare requirements first"))]
-    MissingJail,
+    MissingEnvironment,
     #[snafu(display("Missing temp dir, fetch first"))]
     MissingTempDir,
     #[snafu(display("The recipe is not compatible with your architecture"))]
@@ -48,9 +50,12 @@ pub enum RecipeError {
 
 type RecipeResult<T> = Result<T, RecipeError>;
 
+/// The Linux platform.
 pub const LINUX: u8 = 0x01;
 
+/// The X86_64 architecture.
 pub const X86_64: u8 = 0x01;
+/// The X86 (32-bit) architecture.
 pub const X86: u8 = 0x02;
 
 fn check_archs(archs: u8) -> RecipeResult<()> {

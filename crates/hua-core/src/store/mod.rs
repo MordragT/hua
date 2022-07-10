@@ -8,13 +8,20 @@ use std::path::PathBuf;
 
 pub use store::*;
 
+/// Different backends for the [Store].
 pub mod backend;
+/// Identifieres for [Object] and [Package].
 pub mod id;
-pub mod locator;
+/// Operations to locate [packages](Package).
+pub mod location;
+/// Operations and data types for objects.
 pub mod object;
+/// Operations and data types of packages.
 pub mod package;
 mod store;
 
+/// An [Error](std::error::Error) for store operations.
+#[allow(missing_docs)]
 #[derive(Debug, Snafu)]
 pub enum StoreError {
     #[snafu(display("UrlParseError: {source}"))]

@@ -1,6 +1,7 @@
 use rustbreak::DeSerializer;
 use serde::{Deserialize, Serialize};
 
+/// Allows for the (de-)serialization with [pot].
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Pot;
 

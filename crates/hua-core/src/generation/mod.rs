@@ -13,7 +13,9 @@ use crate::{
     store::StoreError,
 };
 
+/// An [Error](std::error::Error) inside the [crate::generation] module.
 #[derive(Debug, Snafu)]
+#[allow(missing_docs)]
 pub enum GenerationError {
     #[snafu(display("Dependency Error for generation {id}: {source}"))]
     DependencyError { id: usize, source: DependencyError },

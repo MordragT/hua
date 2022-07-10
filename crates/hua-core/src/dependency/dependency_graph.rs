@@ -222,7 +222,7 @@ impl<'a> DependencyGraph<'a> {
 
             for id in options.iter() {
                 let package = unsafe { store.packages().get_unchecked(&id) };
-                let blobs = unsafe { store.get_blobs_of_package(id).unwrap_unchecked() };
+                let blobs = unsafe { store.blobs_of_package(id).unwrap_unchecked() };
                 if conflicts(&mut self.names, &mut self.objects, &package.name, blobs).is_none() {
                     *step = Step::Resolved(*id);
                     result = Some(package);

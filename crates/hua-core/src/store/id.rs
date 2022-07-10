@@ -3,6 +3,9 @@ use std::{array::TryFromSliceError, fmt, ops::Deref, str::FromStr};
 
 use crate::extra;
 
+use super::location::Source;
+
+/// An raw identifier which can be casted into [PackageId] or [ObjectId].
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct RawId([u8; 32]);
 
@@ -39,14 +42,17 @@ impl From<ObjectId> for RawId {
     }
 }
 
+/// An identifier for [packages](crate::store::Package).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct PackageId(RawId);
 
 impl PackageId {
+    /// Converts an [PackageId] to a slice of bytes.
     pub fn as_bytes(&self) -> &[u8] {
         &self.0 .0
     }
 
+    /// Truncates an [PackageId] into a [u64] number.
     pub fn truncate(&self) -> u64 {
         let mut res: [u8; 8] = Default::default();
         res.copy_from_slice(&self.0 .0[0..8]);
@@ -125,14 +131,108 @@ impl FromStr for PackageId {
     }
 }
 
+/// An identifier for a [Store](super::Store).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
-pub struct ObjectId(RawId);
+pub struct StoreId(RawId);
 
-impl ObjectId {
+impl StoreId {
+    /// Converts an [PackageId] to a slice of bytes.
     pub fn as_bytes(&self) -> &[u8] {
         &self.0 .0
     }
 
+    /// Truncates an [PackageId] into a [u64] number.
+    pub fn truncate(&self) -> u64 {
+        let mut res: [u8; 8] = Default::default();
+        res.copy_from_slice(&self.0 .0[0..8]);
+        u64::from_be_bytes(res)
+    }
+}
+
+impl fmt::Display for StoreId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for byte in &self.0 .0 {
+            write!(f, "{:02x}", byte)?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Debug for StoreId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for byte in &self.0 .0 {
+            write!(f, "{:02x}", byte)?;
+        }
+        Ok(())
+    }
+}
+
+impl From<[u8; 32]> for StoreId {
+    fn from(hash: [u8; 32]) -> Self {
+        StoreId(RawId(hash))
+    }
+}
+
+impl From<StoreId> for Vec<u8> {
+    fn from(id: StoreId) -> Self {
+        id.0 .0.to_vec()
+    }
+}
+
+impl TryFrom<Vec<u8>> for StoreId {
+    type Error = Vec<u8>;
+
+    fn try_from(vec: Vec<u8>) -> Result<Self, Self::Error> {
+        let hash = <[u8; 32]>::try_from(vec)?;
+        Ok(StoreId(RawId(hash)))
+    }
+}
+
+impl TryFrom<&[u8]> for StoreId {
+    type Error = TryFromSliceError;
+
+    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
+        let hash = <[u8; 32]>::try_from(slice)?;
+        Ok(StoreId(RawId(hash)))
+    }
+}
+
+impl From<RawId> for StoreId {
+    fn from(id: RawId) -> Self {
+        StoreId(id)
+    }
+}
+
+impl Deref for StoreId {
+    type Target = RawId;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl FromStr for StoreId {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let vec = extra::str::parse_hex(s);
+        vec.try_into()
+            .map_err(|_| "Could not convert vec to id.".to_owned())
+    }
+}
+
+/// An identifier for [objects](crate::store::Object).
+/// Can be used to retrieve [objects](crate::store::Object)
+/// from the [Objects](crate::store::object::Objects) data structure.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
+pub struct ObjectId(RawId);
+
+impl ObjectId {
+    /// Converts an [ObjectId] to a slice of bytes.
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0 .0
+    }
+
+    /// Truncates an [ObjectId] into a [u64] number.
     pub fn truncate(&self) -> u64 {
         let mut res: [u8; 8] = Default::default();
         res.copy_from_slice(&self.0 .0[0..8]);

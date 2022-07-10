@@ -1,6 +1,7 @@
 use super::{object::Objects, package::Packages, *};
 use std::any::Any;
 
+/// An in-memory [ReadBackend] and [WriteBackend].
 #[derive(Debug)]
 pub struct MemoryBackend {
     objects: Objects,
