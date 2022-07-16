@@ -54,6 +54,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .arg(arg!(<ID> "The id of the generation to remove"))
                         .arg_required_else_help(true),
                     Command::new("list").about("List all the generations of the current user"),
+                    Command::new("current").about("Returns the id of the current generation in use by the user"),
                     Command::new("switch")
                         .about("Switch to a specific generation")
                         .arg(arg!(<ID> "The id of the generation to switch to"))
@@ -82,6 +83,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 Command::new("remove").about("Removes a cache"),
             ])
         ]).get_matches();
+
+    // TODO capdacoverride is sufficent no nead for read_search
 
     match matches.subcommand() {
         Some(("init", _)) => {
@@ -227,6 +230,18 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 let user_manager = UserManager::open(USER_MANAGER_PATH)?;
                 user_manager.list_current_generations();
+            }
+            Some(("current", _)) => {
+                if caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_READ_SEARCH)? {
+                    caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
+                } else {
+                    return Err(
+                        "Please run hua init as root or with the appropiate capabilities".into(),
+                    );
+                }
+
+                let user_manager = UserManager::open(USER_MANAGER_PATH)?;
+                println!("{}", user_manager.current_generation_index());
             }
             Some(("remove", sub_matches)) => {
                 if caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_OVERRIDE)?

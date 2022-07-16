@@ -62,6 +62,10 @@ impl GenerationManager {
         Ok(())
     }
 
+    pub fn current_index(&self) -> usize {
+        self.current
+    }
+
     pub fn switch_global_links(&mut self, global_paths: &ComponentPathBuf) -> GenerationResult<()> {
         self.unlink_global()?;
         self.link_current_global(global_paths)

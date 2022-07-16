@@ -121,6 +121,10 @@ impl UserManager {
         self.current_user_mut().generation_manager_mut()
     }
 
+    pub fn current_generation_index(&self) -> usize {
+        self.current_user().generation_manager().current_index()
+    }
+
     /// Inserts a requiremnt into the current user.
     /// If the requirement was not fullfilled, a try to get a matching package from the store is started.
     /// If the package could be retrieved a new generation is created and true is returned.
