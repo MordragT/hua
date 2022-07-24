@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["ProgressBar",""]]});
+window.SIDEBAR_ITEMS = {"struct":[["ProgressBar",""]]};

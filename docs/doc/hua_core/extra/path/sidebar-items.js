@@ -1,1 +1,1 @@
-initSidebarItems({"fn":[["relative_path_between",""]],"struct":[["ComponentPathBuf",""]]});
+window.SIDEBAR_ITEMS = {"fn":[["relative_path_between","Calculates the [RelativePathBuf] between two [Path]."]],"struct":[["ComponentPathBuf",""]]};

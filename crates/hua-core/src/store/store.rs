@@ -599,9 +599,14 @@ mod tests {
         store.insert(one).unwrap();
         store.insert(two).unwrap();
 
+        let global_temp = temp_dir.child("global");
+        fs::create_dir(&global_temp).unwrap();
+        let global_paths = ComponentPathBuf::from_path(&global_temp);
+        global_paths.create_dirs(false).unwrap();
+
         let mut user_manager = UserManager::init(&user_manager_path).unwrap();
         assert!(user_manager
-            .insert_requirement(one_req, &mut store)
+            .insert_requirement(one_req, &mut store, &global_paths)
             .unwrap());
 
         let removed = store.remove_unused(&mut user_manager).unwrap();

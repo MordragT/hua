@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["Blake3",""],["PackageHash",""]]});
+window.SIDEBAR_ITEMS = {"fn":[["root_hash",""],["verify",""]],"struct":[["Blake3","Provides a Blake3 [Hasher] for the [MerkleTree]."],["PackageHash","Calculates the hashes for the directories of an [crate::store::package::Package]."]]};

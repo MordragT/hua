@@ -1,1 +1,1 @@
-initSidebarItems({"enum":[["GenerationError",""]],"struct":[["Generation",""],["GenerationBuilder",""],["GenerationManager",""]]});
+window.SIDEBAR_ITEMS = {"enum":[["GenerationError",""]],"struct":[["Generation",""],["GenerationBuilder",""],["GenerationManager",""]]};

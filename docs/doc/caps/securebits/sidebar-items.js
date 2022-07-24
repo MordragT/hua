@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["has_keepcaps","Return whether the current thread’s “keep capabilities” flag is set."],["set_keepcaps","Set the value of the current thread’s “keep capabilities” flag."]]};

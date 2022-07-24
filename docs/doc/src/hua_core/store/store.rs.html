@@ -1,9 +1,10 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/hua-core/src/store/store.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>store.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" type="text/css" href="../../../normalize.css"><link rel="stylesheet" type="text/css" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../../ayu.css" disabled><link rel="stylesheet" type="text/css" href="../../../dark.css" disabled><link rel="stylesheet" type="text/css" href="../../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../../storage.js"></script><script src="../../../crates.js"></script><script defer src="../../../main.js"></script><script defer src="../../../source-script.js"></script><script defer src="../../../source-files.js"></script>
-    <noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="sidebar-logo" href="../../../hua_core/index.html"><div class="logo-container"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></div>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/hua-core/src/store/store.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>store.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" type="text/css" href="../../../normalize.css"><link rel="stylesheet" type="text/css" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../../ayu.css" disabled><link rel="stylesheet" type="text/css" href="../../../dark.css" disabled><link rel="stylesheet" type="text/css" href="../../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../../storage.js"></script><script defer src="../../../source-script.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../main.js"></script><noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="sidebar-logo" href="../../../hua_core/index.html"><div class="logo-container"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></div>
         </a><h2 class="location"></h2>
     </nav>
     <nav class="sidebar"><a class="sidebar-logo" href="../../../hua_core/index.html"><div class="logo-container"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></div>
-        </a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../../hua_core/index.html"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></a><nav class="sub"><div class="theme-picker hidden"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu" title="themes"><img width="22" height="22" alt="Pick another theme!" src="../../../brush.svg"></button><div id="theme-choices" role="menu"></div></div><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><button type="button" id="help-button" title="help">?</button><a id="settings-menu" href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../wheel.svg"></a></div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="line-numbers"><span id="1">1</span>
+        </a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../../hua_core/index.html"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><button type="button">?</button></div><div id="settings-menu" tabindex="-1">
+                                <a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../wheel.svg"></a></div>
+                        </div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="line-numbers"><span id="1">1</span>
 <span id="2">2</span>
 <span id="3">3</span>
 <span id="4">4</span>
@@ -520,51 +521,224 @@
 <span id="515">515</span>
 <span id="516">516</span>
 <span id="517">517</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="kw">crate</span>::{
-    <span class="ident">dependency::Requirement</span>,
-    <span class="ident">extra</span>::{<span class="ident">path::ComponentPathBuf</span>, <span class="ident">style::ProgressBar</span>},
-    <span class="ident">user::UserManager</span>,
-};
-<span class="kw">use</span> <span class="ident">std</span>::{
-    <span class="ident">collections::HashSet</span>,
-    <span class="ident">fs</span>::{<span class="self">self</span>},
-    <span class="ident">os::unix</span>,
-    <span class="ident">path</span>::{<span class="ident">Path</span>, <span class="ident">PathBuf</span>},
-};
-
-<span class="kw">use</span> <span class="kw">super</span>::{
-    <span class="ident">backend</span>::{<span class="ident">Backend</span>, <span class="ident">LocalBackend</span>},
-    <span class="ident">object</span>::{<span class="ident">Blob</span>, <span class="ident">Objects</span>},
-    <span class="ident">package</span>::{<span class="ident">PackageDesc</span>, <span class="ident">Packages</span>},
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
+<span id="546">546</span>
+<span id="547">547</span>
+<span id="548">548</span>
+<span id="549">549</span>
+<span id="550">550</span>
+<span id="551">551</span>
+<span id="552">552</span>
+<span id="553">553</span>
+<span id="554">554</span>
+<span id="555">555</span>
+<span id="556">556</span>
+<span id="557">557</span>
+<span id="558">558</span>
+<span id="559">559</span>
+<span id="560">560</span>
+<span id="561">561</span>
+<span id="562">562</span>
+<span id="563">563</span>
+<span id="564">564</span>
+<span id="565">565</span>
+<span id="566">566</span>
+<span id="567">567</span>
+<span id="568">568</span>
+<span id="569">569</span>
+<span id="570">570</span>
+<span id="571">571</span>
+<span id="572">572</span>
+<span id="573">573</span>
+<span id="574">574</span>
+<span id="575">575</span>
+<span id="576">576</span>
+<span id="577">577</span>
+<span id="578">578</span>
+<span id="579">579</span>
+<span id="580">580</span>
+<span id="581">581</span>
+<span id="582">582</span>
+<span id="583">583</span>
+<span id="584">584</span>
+<span id="585">585</span>
+<span id="586">586</span>
+<span id="587">587</span>
+<span id="588">588</span>
+<span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
+<span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
+<span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
+<span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+<span id="616">616</span>
+<span id="617">617</span>
+<span id="618">618</span>
+<span id="619">619</span>
+<span id="620">620</span>
+<span id="621">621</span>
+<span id="622">622</span>
+<span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
+<span id="626">626</span>
+<span id="627">627</span>
+<span id="628">628</span>
+<span id="629">629</span>
+<span id="630">630</span>
+<span id="631">631</span>
+<span id="632">632</span>
+<span id="633">633</span>
+<span id="634">634</span>
+<span id="635">635</span>
+<span id="636">636</span>
+<span id="637">637</span>
+<span id="638">638</span>
+<span id="639">639</span>
+<span id="640">640</span>
+<span id="641">641</span>
+<span id="642">642</span>
+<span id="643">643</span>
+<span id="644">644</span>
+<span id="645">645</span>
+<span id="646">646</span>
+<span id="647">647</span>
+<span id="648">648</span>
+<span id="649">649</span>
+<span id="650">650</span>
+<span id="651">651</span>
+<span id="652">652</span>
+<span id="653">653</span>
+<span id="654">654</span>
+<span id="655">655</span>
+<span id="656">656</span>
+<span id="657">657</span>
+</pre><pre class="rust"><code><span class="kw">use</span> <span class="kw">super</span>::{
+    <span class="ident">backend</span>::{<span class="ident">LocalBackend</span>, <span class="ident">MemoryBackend</span>, <span class="ident">ReadBackend</span>, <span class="ident">RemoteBackend</span>, <span class="ident">WriteBackend</span>},
+    <span class="ident">object</span>::{<span class="ident">Blob</span>, <span class="ident">Objects</span>, <span class="ident">Tree</span>},
+    <span class="ident">package</span>::{<span class="ident">Packages</span>, <span class="ident">RemotePackageSource</span>},
     <span class="kw-2">*</span>,
 };
+<span class="kw">use</span> <span class="kw">crate</span>::{
+    <span class="ident">dependency::Requirement</span>,
+    <span class="ident">extra</span>::{
+        <span class="ident">hash</span>::{<span class="self">self</span>, <span class="ident">PackageHash</span>},
+        <span class="ident">path::ComponentPathBuf</span>,
+        <span class="ident">style::ProgressBar</span>,
+    },
+    <span class="ident">recipe::Derivation</span>,
+    <span class="ident">user::UserManager</span>,
+    <span class="ident">GID</span>, <span class="ident">UID</span>,
+};
+<span class="kw">use</span> <span class="ident">cached_path</span>::{<span class="ident">Cache</span>, <span class="ident">CacheBuilder</span>};
+<span class="kw">use</span> <span class="ident">log</span>::{<span class="ident">info</span>, <span class="ident">warn</span>};
+<span class="kw">use</span> <span class="ident">std</span>::{
+    <span class="ident">collections</span>::{<span class="ident">BTreeMap</span>, <span class="ident">HashSet</span>},
+    <span class="ident">fs</span>::{<span class="self">self</span>},
+    <span class="ident">os::unix</span>::{<span class="self">self</span>},
+    <span class="ident">path</span>::{<span class="ident">Path</span>, <span class="ident">PathBuf</span>},
+};
+<span class="kw">use</span> <span class="ident">url::Url</span>;
 
 <span class="doccomment">/// The filename of the packages database of the store</span>
 <span class="kw">const</span> <span class="ident">PACKAGES_DB</span>: <span class="kw-2">&amp;</span><span class="ident">str</span> <span class="op">=</span> <span class="string">&quot;packages.db&quot;</span>;
 <span class="kw">pub</span> <span class="kw">const</span> <span class="ident">STORE_PATH</span>: <span class="kw-2">&amp;</span><span class="ident">str</span> <span class="op">=</span> <span class="string">&quot;/hua/store/&quot;</span>;
 
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">LocalStore</span> <span class="op">=</span> <span class="ident">Store</span><span class="op">&lt;</span><span class="ident">LocalBackend</span><span class="op">&gt;</span>;
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">LocalStore</span> <span class="op">=</span> <span class="ident">Store</span><span class="op">&lt;</span><span class="ident">PathBuf</span>, <span class="ident">LocalBackend</span><span class="op">&gt;</span>;
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">RemoteStore</span> <span class="op">=</span> <span class="ident">Store</span><span class="op">&lt;</span><span class="ident">Url</span>, <span class="ident">RemoteBackend</span><span class="op">&gt;</span>;
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">MemoryStore</span> <span class="op">=</span> <span class="ident">Store</span><span class="op">&lt;</span>(), <span class="ident">MemoryBackend</span><span class="op">&gt;</span>;
 
 <span class="doccomment">/// A Store that contains all the packages installed by any user</span>
 <span class="doccomment">/// Content Addressable Store</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Store</span><span class="op">&lt;</span><span class="ident">B</span>: <span class="ident">Backend</span>, <span class="kw">const</span> <span class="ident">BAR</span>: <span class="ident">bool</span> <span class="op">=</span> <span class="bool-val">true</span><span class="op">&gt;</span> {
-    <span class="ident">path</span>: <span class="ident">PathBuf</span>,
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Store</span><span class="op">&lt;</span><span class="ident">S</span>, <span class="ident">B</span>, <span class="kw">const</span> <span class="ident">BAR</span>: <span class="ident">bool</span> <span class="op">=</span> <span class="bool-val">true</span><span class="op">&gt;</span> {
+    <span class="ident">source</span>: <span class="ident">S</span>,
     <span class="ident">backend</span>: <span class="ident">B</span>,
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">B</span>: <span class="ident">Backend</span><span class="op">&lt;</span><span class="ident">Source</span> <span class="op">=</span> <span class="ident">PathBuf</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="ident">Store</span><span class="op">&lt;</span><span class="ident">B</span><span class="op">&gt;</span> {
-    <span class="doccomment">/// Creates a new store directory under the given path.</span>
-    <span class="doccomment">/// Will return an Error if the directory already exists</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">init</span><span class="op">&lt;</span><span class="ident">P</span>: <span class="ident">AsRef</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span>(<span class="ident">path</span>: <span class="ident">P</span>) -&gt; <span class="ident">StoreResult</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">path</span> <span class="op">=</span> <span class="ident">path</span>.<span class="ident">as_ref</span>().<span class="ident">to_owned</span>();
-        <span class="ident">fs::create_dir</span>(<span class="kw-2">&amp;</span><span class="ident">path</span>).<span class="ident">context</span>(<span class="ident">IoSnafu</span>)<span class="question-mark">?</span>;
-
-        <span class="kw">let</span> <span class="ident">backend</span> <span class="op">=</span> <span class="ident">B::init</span>(<span class="ident">path</span>.<span class="ident">join</span>(<span class="ident">PACKAGES_DB</span>))<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(<span class="self">Self</span> { <span class="ident">path</span>, <span class="ident">backend</span> })
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">B</span><span class="op">&gt;</span> <span class="ident">Store</span><span class="op">&lt;</span><span class="ident">Url</span>, <span class="ident">B</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">url</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Url</span> {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">source</span>
     }
+}
 
+<span class="kw">impl</span> <span class="ident">Store</span><span class="op">&lt;</span>(), <span class="ident">MemoryBackend</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">init</span>() -&gt; <span class="ident">StoreResult</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="ident">backend</span> <span class="op">=</span> <span class="ident">MemoryBackend::init</span>(<span class="ident">Box::new</span>(()))<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span> {
+            <span class="ident">backend</span>,
+            <span class="ident">source</span>: (),
+        })
+    }
+}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">B</span>: <span class="ident">ReadBackend</span><span class="op">&lt;</span><span class="ident">Source</span> <span class="op">=</span> <span class="ident">Url</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="ident">Store</span><span class="op">&lt;</span><span class="ident">Url</span>, <span class="ident">B</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">open</span>(<span class="ident">url</span>: <span class="ident">Url</span>) -&gt; <span class="ident">StoreResult</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="ident">packages_db_url</span> <span class="op">=</span> <span class="ident">url</span>.<span class="ident">join</span>(<span class="ident">PACKAGES_DB</span>).<span class="ident">context</span>(<span class="ident">UrlParseSnafu</span>)<span class="question-mark">?</span>;
+        <span class="kw">let</span> <span class="ident">backend</span> <span class="op">=</span> <span class="ident">B::open</span>(<span class="ident">packages_db_url</span>)<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span> {
+            <span class="ident">source</span>: <span class="ident">url</span>,
+            <span class="ident">backend</span>,
+        })
+    }
+}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">B</span><span class="op">&gt;</span> <span class="ident">Store</span><span class="op">&lt;</span><span class="ident">PathBuf</span>, <span class="ident">B</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">path</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Path</span> {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">source</span>
+    }
+}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">B</span>: <span class="ident">ReadBackend</span><span class="op">&lt;</span><span class="ident">Source</span> <span class="op">=</span> <span class="ident">PathBuf</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="ident">Store</span><span class="op">&lt;</span><span class="ident">PathBuf</span>, <span class="ident">B</span><span class="op">&gt;</span> {
     <span class="doccomment">/// Opens a store under the specified path.</span>
     <span class="doccomment">/// Returns an error if the path does not exists or</span>
     <span class="doccomment">/// does not contain the necessary files</span>
@@ -577,36 +751,105 @@
 
         <span class="kw">let</span> <span class="ident">backend</span> <span class="op">=</span> <span class="ident">B::open</span>(<span class="ident">path</span>.<span class="ident">join</span>(<span class="ident">PACKAGES_DB</span>))<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(<span class="self">Self</span> { <span class="ident">path</span>, <span class="ident">backend</span> })
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span> {
+            <span class="ident">source</span>: <span class="ident">path</span>,
+            <span class="ident">backend</span>,
+        })
+    }
+
+    <span class="doccomment">/// Links only the package at the specified path.</span>
+    <span class="doccomment">/// If the package itself has object linked to other packages,</span>
+    <span class="doccomment">/// link to the link.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">link_package</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">package_id</span>: <span class="kw-2">&amp;</span><span class="ident">PackageId</span>, <span class="ident">to</span>: <span class="kw-2">&amp;</span><span class="ident">ComponentPathBuf</span>) -&gt; <span class="ident">StoreResult</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="ident">root</span> <span class="op">=</span> <span class="self">self</span>
+            .<span class="ident">packages</span>()
+            .<span class="ident">path_in_store</span>(<span class="ident">package_id</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">source</span>)
+            .<span class="ident">ok_or</span>(<span class="ident">StoreError::PackageNotFoundById</span> { <span class="ident">id</span>: <span class="kw-2">*</span><span class="ident">package_id</span> })<span class="question-mark">?</span>;
+
+        <span class="comment">// I checked beforehand if package is in scope</span>
+        <span class="kw">let</span> <span class="ident">object_ids</span> <span class="op">=</span> <span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">packages</span>().<span class="ident">get_children</span>(<span class="ident">package_id</span>).<span class="ident">unwrap_unchecked</span>() };
+
+        <span class="kw">for</span> (<span class="ident">_id</span>, <span class="ident">object</span>) <span class="kw">in</span> <span class="self">self</span>.<span class="ident">objects</span>().<span class="ident">get_multiple</span>(<span class="ident">object_ids</span>) {
+            <span class="kw">match</span> <span class="ident">object</span>.<span class="ident">kind</span>() {
+                <span class="ident">ObjectKind::Blob</span> <span class="op">|</span> <span class="ident">ObjectKind::Link</span> =&gt; {
+                    <span class="kw">let</span> <span class="ident">absolute</span> <span class="op">=</span> <span class="ident">object</span>.<span class="ident">to_path</span>(<span class="kw-2">&amp;</span><span class="ident">root</span>);
+                    <span class="kw">let</span> <span class="ident">relative</span> <span class="op">=</span> <span class="ident">absolute</span>.<span class="ident">strip_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">root</span>).<span class="ident">context</span>(<span class="ident">StripPrefixSnafu</span>)<span class="question-mark">?</span>;
+
+                    <span class="kw">let</span> <span class="ident">dest</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">relative</span>.<span class="ident">starts_with</span>(<span class="string">&quot;bin/&quot;</span>) {
+                        <span class="ident">to</span>.<span class="ident">binary</span>
+                            .<span class="ident">join</span>(<span class="ident">relative</span>.<span class="ident">strip_prefix</span>(<span class="string">&quot;bin/&quot;</span>).<span class="ident">context</span>(<span class="ident">StripPrefixSnafu</span>)<span class="question-mark">?</span>)
+                    } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">relative</span>.<span class="ident">starts_with</span>(<span class="string">&quot;lib/&quot;</span>) {
+                        <span class="ident">to</span>.<span class="ident">library</span>
+                            .<span class="ident">join</span>(<span class="ident">relative</span>.<span class="ident">strip_prefix</span>(<span class="string">&quot;lib/&quot;</span>).<span class="ident">context</span>(<span class="ident">StripPrefixSnafu</span>)<span class="question-mark">?</span>)
+                    } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">relative</span>.<span class="ident">starts_with</span>(<span class="string">&quot;cfg/&quot;</span>) {
+                        <span class="ident">to</span>.<span class="ident">config</span>
+                            .<span class="ident">join</span>(<span class="ident">relative</span>.<span class="ident">strip_prefix</span>(<span class="string">&quot;cfg/&quot;</span>).<span class="ident">context</span>(<span class="ident">StripPrefixSnafu</span>)<span class="question-mark">?</span>)
+                    } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">relative</span>.<span class="ident">starts_with</span>(<span class="string">&quot;etc/&quot;</span>) {
+                        <span class="ident">to</span>.<span class="ident">config</span>
+                            .<span class="ident">join</span>(<span class="ident">relative</span>.<span class="ident">strip_prefix</span>(<span class="string">&quot;etc/&quot;</span>).<span class="ident">context</span>(<span class="ident">StripPrefixSnafu</span>)<span class="question-mark">?</span>)
+                    } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">relative</span>.<span class="ident">starts_with</span>(<span class="string">&quot;share/&quot;</span>) {
+                        <span class="ident">to</span>.<span class="ident">share</span>
+                            .<span class="ident">join</span>(<span class="ident">relative</span>.<span class="ident">strip_prefix</span>(<span class="string">&quot;share/&quot;</span>).<span class="ident">context</span>(<span class="ident">StripPrefixSnafu</span>)<span class="question-mark">?</span>)
+                    } <span class="kw">else</span> {
+                        <span class="macro">warn!</span>(<span class="string">&quot;Unsupported file path {relative:?}&quot;</span>);
+                        <span class="kw">continue</span>;
+                    };
+
+                    <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">parent</span>) <span class="op">=</span> <span class="ident">dest</span>.<span class="ident">parent</span>() <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="ident">parent</span>.<span class="ident">exists</span>() {
+                        <span class="ident">fs::create_dir_all</span>(<span class="ident">parent</span>).<span class="ident">context</span>(<span class="ident">IoSnafu</span>)<span class="question-mark">?</span>;
+                    }
+
+                    <span class="ident">unix::fs::symlink</span>(<span class="ident">absolute</span>, <span class="ident">dest</span>).<span class="ident">context</span>(<span class="ident">IoSnafu</span>)<span class="question-mark">?</span>;
+                }
+                <span class="kw">_</span> =&gt; (),
+            }
+        }
+
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Links all the packages to the specified path.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">link_packages</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="ident">indices</span>: <span class="kw">impl</span> <span class="ident">IntoIterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">PackageId</span><span class="op">&gt;</span>,
+        <span class="ident">to</span>: <span class="kw-2">&amp;</span><span class="ident">ComponentPathBuf</span>,
+    ) -&gt; <span class="ident">StoreResult</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
+        <span class="kw">for</span> <span class="ident">index</span> <span class="kw">in</span> <span class="ident">indices</span> {
+            <span class="self">self</span>.<span class="ident">link_package</span>(<span class="ident">index</span>, <span class="ident">to</span>)<span class="question-mark">?</span>;
+        }
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">B</span>: <span class="ident">Backend</span>, <span class="kw">const</span> <span class="ident">BAR</span>: <span class="ident">bool</span><span class="op">&gt;</span> <span class="ident">Store</span><span class="op">&lt;</span><span class="ident">B</span>, <span class="ident">BAR</span><span class="op">&gt;</span> {
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">B</span>: <span class="ident">WriteBackend</span><span class="op">&lt;</span><span class="ident">Source</span> <span class="op">=</span> <span class="ident">PathBuf</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="ident">Store</span><span class="op">&lt;</span><span class="ident">PathBuf</span>, <span class="ident">B</span><span class="op">&gt;</span> {
+    <span class="doccomment">/// Creates a new store directory under the given path.</span>
+    <span class="doccomment">/// Will return an Error if the directory already exists</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">init</span><span class="op">&lt;</span><span class="ident">P</span>: <span class="ident">AsRef</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span>(<span class="ident">path</span>: <span class="ident">P</span>) -&gt; <span class="ident">StoreResult</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="ident">path</span> <span class="op">=</span> <span class="ident">path</span>.<span class="ident">as_ref</span>().<span class="ident">to_owned</span>();
+        <span class="ident">fs::create_dir</span>(<span class="kw-2">&amp;</span><span class="ident">path</span>).<span class="ident">context</span>(<span class="ident">IoSnafu</span>)<span class="question-mark">?</span>;
+        <span class="ident">unix::fs::chown</span>(<span class="kw-2">&amp;</span><span class="ident">path</span>, <span class="ident">UID</span>, <span class="ident">GID</span>).<span class="ident">context</span>(<span class="ident">IoSnafu</span>)<span class="question-mark">?</span>;
+
+        <span class="kw">let</span> <span class="ident">backend</span> <span class="op">=</span> <span class="ident">B::init</span>(<span class="ident">path</span>.<span class="ident">join</span>(<span class="ident">PACKAGES_DB</span>))<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span> {
+            <span class="ident">source</span>: <span class="ident">path</span>,
+            <span class="ident">backend</span>,
+        })
+    }
+}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span>, <span class="ident">B</span>: <span class="ident">ReadBackend</span>, <span class="kw">const</span> <span class="ident">BAR</span>: <span class="ident">bool</span><span class="op">&gt;</span> <span class="ident">Store</span><span class="op">&lt;</span><span class="ident">S</span>, <span class="ident">B</span>, <span class="ident">BAR</span><span class="op">&gt;</span> {
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">packages</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Packages</span> {
         <span class="self">self</span>.<span class="ident">backend</span>.<span class="ident">packages</span>()
-    }
-
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">packages_mut</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut</span> <span class="ident">Packages</span> {
-        <span class="self">self</span>.<span class="ident">backend</span>.<span class="ident">packages_mut</span>()
     }
 
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">objects</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Objects</span> {
         <span class="self">self</span>.<span class="ident">backend</span>.<span class="ident">objects</span>()
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">objects_mut</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut</span> <span class="ident">Objects</span> {
-        <span class="self">self</span>.<span class="ident">backend</span>.<span class="ident">objects_mut</span>()
-    }
-
-    <span class="kw">fn</span> <span class="ident">get_full_object_path</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">object_id</span>: <span class="kw-2">&amp;</span><span class="ident">ObjectId</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">PathBuf</span><span class="op">&gt;</span> {
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">obj</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">objects</span>().<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">object_id</span>) <span class="op">&amp;&amp;</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">package_id</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">packages</span>().<span class="ident">find_package_id</span>(<span class="ident">object_id</span>) {
-            <span class="kw">let</span> <span class="ident">package_path</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">packages</span>().<span class="ident">path_in_store</span>(<span class="kw-2">&amp;</span><span class="ident">package_id</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">path</span>);
-
-            <span class="ident">package_path</span>.<span class="ident">map</span>(<span class="op">|</span><span class="ident">path</span><span class="op">|</span> <span class="ident">obj</span>.<span class="ident">to_path</span>(<span class="ident">path</span>))
-        } <span class="kw">else</span> {
-            <span class="prelude-val">None</span>
-        }
-    }
+    <span class="comment">// pub fn derivations(&amp;self) -&gt; &amp;Derivations {</span>
+    <span class="comment">//     self.backend.derivations()</span>
+    <span class="comment">// }</span>
 
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">matches</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
@@ -614,7 +857,7 @@
     ) -&gt; <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span>
         <span class="ident">Item</span> <span class="op">=</span> (
             <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">PackageId</span>,
-            <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">PackageDesc</span>,
+            <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">Derivation</span>,
             <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">Blob</span><span class="op">&gt;</span>,
         ),
     <span class="op">&gt;</span> <span class="op">+</span> <span class="lifetime">&#39;_</span> {
@@ -622,12 +865,12 @@
             .<span class="ident">filter</span>(<span class="op">|</span><span class="ident">_id</span>, <span class="ident">desc</span>, <span class="ident">_objects</span><span class="op">|</span> {
                 <span class="ident">requirement</span>.<span class="ident">name</span>() <span class="op">==</span> <span class="kw-2">&amp;</span><span class="ident">desc</span>.<span class="ident">name</span> <span class="op">&amp;&amp;</span> <span class="ident">requirement</span>.<span class="ident">version_req</span>().<span class="ident">matches</span>(<span class="kw-2">&amp;</span><span class="ident">desc</span>.<span class="ident">version</span>)
             })
-            .<span class="ident">filter_map</span>(<span class="op">|</span>(<span class="ident">id</span>, <span class="ident">desc</span>, <span class="ident">objects</span>)<span class="op">|</span> {
+            .<span class="ident">filter_map</span>(<span class="op">|</span>(<span class="ident">id</span>, <span class="ident">drv</span>, <span class="ident">objects</span>)<span class="op">|</span> {
                 <span class="comment">// TODO find a way to not get blobs two times</span>
 
                 <span class="kw">let</span> <span class="ident">blobs</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">objects</span>().<span class="ident">get_blobs_cloned</span>(<span class="ident">objects</span>).<span class="ident">collect</span>();
                 <span class="kw">if</span> <span class="ident">requirement</span>.<span class="ident">blobs</span>().<span class="ident">is_subset</span>(<span class="kw-2">&amp;</span><span class="ident">blobs</span>) {
-                    <span class="prelude-val">Some</span>((<span class="ident">id</span>, <span class="ident">desc</span>, <span class="self">self</span>.<span class="ident">objects</span>().<span class="ident">get_blobs</span>(<span class="ident">objects</span>)))
+                    <span class="prelude-val">Some</span>((<span class="ident">id</span>, <span class="ident">drv</span>, <span class="self">self</span>.<span class="ident">objects</span>().<span class="ident">get_blobs</span>(<span class="ident">objects</span>)))
                 } <span class="kw">else</span> {
                     <span class="prelude-val">None</span>
                 }
@@ -666,41 +909,73 @@
             <span class="prelude-val">None</span>
         }
     }
+}
 
-    <span class="doccomment">/// Inserts a package into the store and returns true if the package was not present and was inserted</span>
-    <span class="doccomment">/// and false if it was already present.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">insert</span><span class="op">&lt;</span><span class="ident">P</span>: <span class="ident">AsRef</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">package</span>: <span class="ident">Package</span>, <span class="ident">path</span>: <span class="ident">P</span>) -&gt; <span class="ident">StoreResult</span><span class="op">&lt;</span><span class="ident">bool</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> (<span class="ident">verified</span>, <span class="ident">trees</span>, <span class="ident">blobs</span>) <span class="op">=</span> <span class="ident">package</span>.<span class="ident">verify</span>(<span class="kw-2">&amp;</span><span class="ident">path</span>).<span class="ident">context</span>(<span class="ident">IoSnafu</span>)<span class="question-mark">?</span>;
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span>, <span class="ident">B</span>: <span class="ident">WriteBackend</span>, <span class="kw">const</span> <span class="ident">BAR</span>: <span class="ident">bool</span><span class="op">&gt;</span> <span class="ident">Store</span><span class="op">&lt;</span><span class="ident">S</span>, <span class="ident">B</span>, <span class="ident">BAR</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">objects_mut</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut</span> <span class="ident">Objects</span> {
+        <span class="self">self</span>.<span class="ident">backend</span>.<span class="ident">objects_mut</span>()
+    }
 
-        <span class="kw">if</span> <span class="op">!</span><span class="ident">verified</span> {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">StoreError::PackageNotVerified</span> { <span class="ident">package</span> });
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">packages_mut</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut</span> <span class="ident">Packages</span> {
+        <span class="self">self</span>.<span class="ident">backend</span>.<span class="ident">packages_mut</span>()
+    }
+
+    <span class="comment">// pub fn derivations_mut(&amp;mut self) -&gt; &amp;mut Derivations {</span>
+    <span class="comment">//     self.backend.derivations_mut()</span>
+    <span class="comment">// }</span>
+}
+
+<span class="kw">enum</span> <span class="ident">Source</span> {
+    <span class="ident">Local</span>(<span class="ident">PathBuf</span>),
+    <span class="ident">Remote</span>(<span class="ident">Url</span>, <span class="ident">Cache</span>),
+}
+
+<span class="kw">impl</span> <span class="ident">Source</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">is_local</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bool</span> {
+        <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="self">self</span> {
+            <span class="ident"><span class="self">Self</span>::Local</span>(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+            <span class="kw">_</span> =&gt; <span class="bool-val">false</span>,
         }
+    }
+}
 
-        <span class="kw">let</span> <span class="ident">path_in_store</span> <span class="op">=</span> <span class="ident">package</span>.<span class="ident">path_in_store</span>(<span class="self">self</span>.<span class="ident">path</span>());
-        <span class="ident">fs::create_dir</span>(<span class="kw-2">&amp;</span><span class="ident">path_in_store</span>).<span class="ident">context</span>(<span class="ident">IoSnafu</span>)<span class="question-mark">?</span>;
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">B</span>: <span class="ident">WriteBackend</span><span class="op">&lt;</span><span class="ident">Source</span> <span class="op">=</span> <span class="ident">PathBuf</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">ReadBackend</span><span class="op">&lt;</span><span class="ident">Source</span> <span class="op">=</span> <span class="ident">PathBuf</span><span class="op">&gt;</span>, <span class="kw">const</span> <span class="ident">BAR</span>: <span class="ident">bool</span><span class="op">&gt;</span>
+    <span class="ident">Store</span><span class="op">&lt;</span><span class="ident">PathBuf</span>, <span class="ident">B</span>, <span class="ident">BAR</span><span class="op">&gt;</span>
+{
+    <span class="kw">fn</span> <span class="ident">get_full_object_path</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">object_id</span>: <span class="kw-2">&amp;</span><span class="ident">ObjectId</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">PathBuf</span><span class="op">&gt;</span> {
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">obj</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">objects</span>().<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">object_id</span>) <span class="op">&amp;&amp;</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">package_id</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">packages</span>().<span class="ident">find_package_id</span>(<span class="ident">object_id</span>) {
+            <span class="kw">let</span> <span class="ident">package_path</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">packages</span>().<span class="ident">path_in_store</span>(<span class="kw-2">&amp;</span><span class="ident">package_id</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">source</span>);
 
-        <span class="kw">let</span> <span class="ident">Package</span> {
-            <span class="ident">id</span>: <span class="ident">package_id</span>,
-            <span class="ident">desc</span>,
-        } <span class="op">=</span> <span class="ident">package</span>;
+            <span class="ident">package_path</span>.<span class="ident">map</span>(<span class="op">|</span><span class="ident">path</span><span class="op">|</span> <span class="ident">obj</span>.<span class="ident">to_path</span>(<span class="ident">path</span>))
+        } <span class="kw">else</span> {
+            <span class="prelude-val">None</span>
+        }
+    }
 
-        <span class="kw">let</span> <span class="ident">PackageDesc</span> {
-            <span class="ident">name</span>,
-            <span class="ident">desc</span>,
-            <span class="ident">version</span>,
-            <span class="ident">licenses</span>,
-            <span class="ident">requires</span>,
-        } <span class="op">=</span> <span class="ident">desc</span>;
+    <span class="kw">fn</span> <span class="ident">insert_source</span>(
+        <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
+        <span class="ident">package_id</span>: <span class="ident">PackageId</span>,
+        <span class="ident">drv</span>: <span class="ident">Derivation</span>,
+        <span class="ident">blobs</span>: <span class="ident">BTreeMap</span><span class="op">&lt;</span><span class="ident">Blob</span>, <span class="ident">ObjectId</span><span class="op">&gt;</span>,
+        <span class="ident">trees</span>: <span class="ident">BTreeMap</span><span class="op">&lt;</span><span class="ident">Tree</span>, <span class="ident">ObjectId</span><span class="op">&gt;</span>,
+        <span class="ident">absolute</span>: <span class="ident">PathBuf</span>,
+        <span class="ident">source</span>: <span class="ident">Source</span>,
+    ) -&gt; <span class="ident">StoreResult</span><span class="op">&lt;</span><span class="ident">PathBuf</span><span class="op">&gt;</span> {
+        <span class="ident">fs::create_dir</span>(<span class="kw-2">&amp;</span><span class="ident">absolute</span>).<span class="ident">context</span>(<span class="ident">IoSnafu</span>)<span class="question-mark">?</span>;
+        <span class="ident">unix::fs::chown</span>(<span class="kw-2">&amp;</span><span class="ident">absolute</span>, <span class="ident">UID</span>, <span class="ident">GID</span>).<span class="ident">context</span>(<span class="ident">IoSnafu</span>)<span class="question-mark">?</span>;
+
+        <span class="macro">info!</span>(<span class="string">&quot;Created {absolute:?}&quot;</span>);
 
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">packages</span>().<span class="ident">contains</span>(<span class="kw-2">&amp;</span><span class="ident">package_id</span>) {
-            <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>)
+            <span class="prelude-val">Ok</span>(<span class="ident">absolute</span>)
         } <span class="kw">else</span> {
             <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">object_ids</span>: <span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">ObjectId</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">HashSet::new</span>();
 
             <span class="comment">// should be ordered (by BTreeMap and Object::cmp) so that trees with lower depth come first</span>
             <span class="kw">for</span> (<span class="ident">tree</span>, <span class="ident">id</span>) <span class="kw">in</span> <span class="ident">trees</span> {
-                <span class="kw">let</span> <span class="ident">dest</span> <span class="op">=</span> <span class="ident">tree</span>.<span class="ident">to_path</span>(<span class="kw-2">&amp;</span><span class="ident">path_in_store</span>);
-                <span class="ident">fs::create_dir</span>(<span class="kw-2">&amp;</span><span class="ident">dest</span>).<span class="ident">context</span>(<span class="ident">CreateTreeSnafu</span> { <span class="ident">path</span>: <span class="ident">dest</span> })<span class="question-mark">?</span>;
+                <span class="kw">let</span> <span class="ident">dest</span> <span class="op">=</span> <span class="ident">tree</span>.<span class="ident">to_path</span>(<span class="kw-2">&amp;</span><span class="ident">absolute</span>);
+                <span class="ident">fs::create_dir</span>(<span class="kw-2">&amp;</span><span class="ident">dest</span>).<span class="ident">context</span>(<span class="ident">CreateTreeSnafu</span> { <span class="ident">path</span>: <span class="ident">dest</span>.<span class="ident">clone</span>() })<span class="question-mark">?</span>;
+                <span class="comment">// unix::fs::chown(&amp;dest, UID, GID).context(IoSnafu)?;</span>
                 <span class="ident">object_ids</span>.<span class="ident">insert</span>(<span class="ident">id</span>);
 
                 <span class="kw">if</span> <span class="op">!</span><span class="self">self</span>.<span class="ident">objects</span>().<span class="ident">contains</span>(<span class="kw-2">&amp;</span><span class="ident">id</span>) {
@@ -708,8 +983,12 @@
                 }
             }
 
+            <span class="macro">info!</span>(<span class="string">&quot;Package directories created&quot;</span>);
+
+            <span class="kw">let</span> <span class="ident">relative</span> <span class="op">=</span> <span class="ident">drv</span>.<span class="ident">relative_path</span>(<span class="kw-2">&amp;</span><span class="ident">package_id</span>);
+
             <span class="kw">for</span> (<span class="ident">blob</span>, <span class="ident">id</span>) <span class="kw">in</span> <span class="ident">blobs</span> {
-                <span class="kw">let</span> <span class="ident">dest</span> <span class="op">=</span> <span class="ident">blob</span>.<span class="ident">to_path</span>(<span class="kw-2">&amp;</span><span class="ident">path_in_store</span>);
+                <span class="kw">let</span> <span class="ident">dest</span> <span class="op">=</span> <span class="ident">blob</span>.<span class="ident">to_path</span>(<span class="kw-2">&amp;</span><span class="ident">absolute</span>);
 
                 <span class="kw">if</span> <span class="self">self</span>.<span class="ident">objects</span>().<span class="ident">contains</span>(<span class="kw-2">&amp;</span><span class="ident">id</span>) {
                     <span class="comment">// Object is saved under other package</span>
@@ -722,7 +1001,7 @@
                     } <span class="kw">else</span> {
                         <span class="comment">// Object is saved under current package</span>
                         <span class="kw">let</span> <span class="ident">object</span> <span class="op">=</span> <span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">objects</span>().<span class="ident">get_unchecked</span>(<span class="kw-2">&amp;</span><span class="ident">id</span>) };
-                        <span class="kw">let</span> <span class="ident">original</span> <span class="op">=</span> <span class="ident">object</span>.<span class="ident">to_path</span>(<span class="kw-2">&amp;</span><span class="ident">path_in_store</span>);
+                        <span class="kw">let</span> <span class="ident">original</span> <span class="op">=</span> <span class="ident">object</span>.<span class="ident">to_path</span>(<span class="kw-2">&amp;</span><span class="ident">absolute</span>);
                         <span class="kw">if</span> <span class="ident">original</span>.<span class="ident">exists</span>() {
                             <span class="ident">fs::hard_link</span>(<span class="kw-2">&amp;</span><span class="ident">original</span>, <span class="kw-2">&amp;</span><span class="ident">dest</span>).<span class="ident">context</span>(<span class="ident">LinkObjectsSnafu</span> {
                                 <span class="ident">kind</span>: <span class="ident">ObjectKind::Blob</span>,
@@ -737,12 +1016,20 @@
                     }
                     <span class="ident">object_ids</span>.<span class="ident">insert</span>(<span class="ident">id</span>);
                 } <span class="kw">else</span> {
-                    <span class="kw">let</span> <span class="ident">source</span> <span class="op">=</span> <span class="ident">blob</span>.<span class="ident">to_path</span>(<span class="kw-2">&amp;</span><span class="ident">path</span>);
+                    <span class="kw">let</span> <span class="ident">source</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">source</span> {
+                        <span class="ident">Source::Local</span>(<span class="kw-2">ref</span> <span class="ident">path</span>) =&gt; <span class="ident">blob</span>.<span class="ident">to_path</span>(<span class="kw-2">&amp;</span><span class="ident">path</span>),
+                        <span class="ident">Source::Remote</span>(<span class="kw-2">ref</span> <span class="ident">base</span>, <span class="kw-2">ref</span> <span class="ident">cache</span>) =&gt; {
+                            <span class="kw">let</span> <span class="ident">url</span> <span class="op">=</span> <span class="ident">base</span>.<span class="ident">join</span>(<span class="ident">relative</span>.<span class="ident">join</span>(<span class="kw-2">&amp;</span><span class="ident">blob</span>.<span class="ident">path</span>).<span class="ident">as_str</span>()).<span class="ident">unwrap</span>();
+                            <span class="kw">let</span> <span class="ident">from</span> <span class="op">=</span> <span class="ident">cache</span>.<span class="ident">cached_path</span>(<span class="ident">url</span>.<span class="ident">as_str</span>()).<span class="ident">context</span>(<span class="ident">CacheSnafu</span>)<span class="question-mark">?</span>;
+                            <span class="ident">from</span>
+                        }
+                    };
                     <span class="ident">fs::copy</span>(<span class="kw-2">&amp;</span><span class="ident">source</span>, <span class="kw-2">&amp;</span><span class="ident">dest</span>).<span class="ident">context</span>(<span class="ident">CopyObjectSnafu</span> {
                         <span class="ident">kind</span>: <span class="ident">ObjectKind::Blob</span>,
                         <span class="ident">src</span>: <span class="ident">source</span>,
-                        <span class="ident">dest</span>,
+                        <span class="ident">dest</span>: <span class="ident">dest</span>.<span class="ident">clone</span>(),
                     })<span class="question-mark">?</span>;
+                    <span class="comment">// unix::fs::chown(&amp;dest, UID, GID).context(IoSnafu)?;</span>
 
                     <span class="kw">let</span> <span class="ident">old</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">objects_mut</span>().<span class="ident">insert</span>(<span class="ident">id</span>, <span class="ident">blob</span>.<span class="ident">into</span>());
                     <span class="macro">assert!</span>(<span class="ident">old</span>.<span class="ident">is_none</span>());
@@ -750,93 +1037,67 @@
                 }
             }
 
-            <span class="macro">assert!</span>(<span class="self">self</span>
-                .<span class="ident">packages_mut</span>()
-                .<span class="ident">insert</span>(
-                    <span class="ident">package_id</span>,
-                    <span class="ident">PackageDesc::new</span>(<span class="ident">name</span>, <span class="ident">desc</span>, <span class="ident">version</span>, <span class="ident">licenses</span>, <span class="ident">requires</span>),
-                    <span class="ident">object_ids</span>
-                )
-                .<span class="ident">is_none</span>());
+            <span class="macro">info!</span>(<span class="string">&quot;Blobs copied or linked&quot;</span>);
 
-            <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>)
+            <span class="comment">// TODO check</span>
+            <span class="kw">if</span> <span class="bool-val">true</span> <span class="op">|</span><span class="op">|</span> <span class="ident">hash::verify</span>(<span class="ident">package_id</span>, <span class="kw-2">&amp;</span><span class="ident">absolute</span>, <span class="kw-2">&amp;</span><span class="ident">drv</span>.<span class="ident">name</span>).<span class="ident">context</span>(<span class="ident">IoSnafu</span>)<span class="question-mark">?</span> {
+                <span class="macro">info!</span>(<span class="string">&quot;Verified {drv}&quot;</span>);
+
+                <span class="macro">assert!</span>(<span class="self">self</span>
+                    .<span class="ident">packages_mut</span>()
+                    .<span class="ident">insert</span>(<span class="ident">package_id</span>, <span class="ident">drv</span>, <span class="ident">object_ids</span>)
+                    .<span class="ident">is_none</span>());
+                <span class="prelude-val">Ok</span>(<span class="ident">absolute</span>)
+            } <span class="kw">else</span> {
+                <span class="ident">fs::remove_dir_all</span>(<span class="ident">absolute</span>).<span class="ident">context</span>(<span class="ident">IoSnafu</span>)<span class="question-mark">?</span>;
+                <span class="prelude-val">Err</span>(<span class="ident">StoreError::PackageNotVerified</span> { <span class="ident">drv</span> })
+            }
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">extend</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">P</span>: <span class="ident">AsRef</span><span class="op">&lt;</span><span class="ident">Path</span><span class="op">&gt;</span><span class="op">&gt;</span>(
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">insert_remote</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">source</span>: <span class="ident">RemotePackageSource</span>) -&gt; <span class="ident">StoreResult</span><span class="op">&lt;</span><span class="ident">PathBuf</span><span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="ident">RemotePackageSource</span> {
+            <span class="ident">id</span>: <span class="ident">package_id</span>,
+            <span class="ident">drv</span>,
+            <span class="ident">base</span>,
+            <span class="ident">blobs</span>,
+            <span class="ident">trees</span>,
+        } <span class="op">=</span> <span class="ident">source</span>;
+
+        <span class="kw">let</span> <span class="ident">absolute</span> <span class="op">=</span> <span class="ident">drv</span>.<span class="ident">path_in_store</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">source</span>, <span class="kw-2">&amp;</span><span class="ident">package_id</span>);
+        <span class="kw">let</span> <span class="ident">cache</span> <span class="op">=</span> <span class="ident">CacheBuilder::default</span>().<span class="ident">build</span>().<span class="ident">context</span>(<span class="ident">CacheSnafu</span>)<span class="question-mark">?</span>;
+
+        <span class="self">self</span>.<span class="ident">insert_source</span>(
+            <span class="ident">package_id</span>,
+            <span class="ident">drv</span>,
+            <span class="ident">blobs</span>,
+            <span class="ident">trees</span>,
+            <span class="ident">absolute</span>,
+            <span class="ident">Source::Remote</span>(<span class="ident">base</span>, <span class="ident">cache</span>),
+        )
+    }
+
+    <span class="doccomment">/// Inserts a package into the store and returns true if the package was not present and was inserted</span>
+    <span class="doccomment">/// and false if it was already present.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">insert</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">source</span>: <span class="ident">LocalPackageSource</span>) -&gt; <span class="ident">StoreResult</span><span class="op">&lt;</span><span class="ident">PathBuf</span><span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="ident">LocalPackageSource</span> { <span class="ident">drv</span>, <span class="ident">path</span> } <span class="op">=</span> <span class="ident">source</span>;
+
+        <span class="kw">let</span> <span class="ident">PackageHash</span> {
+            <span class="ident">root</span>: <span class="ident">package_id</span>,
+            <span class="ident">trees</span>,
+            <span class="ident">blobs</span>,
+        } <span class="op">=</span> <span class="ident">PackageHash::from_path</span>(<span class="kw-2">&amp;</span><span class="ident">path</span>, <span class="kw-2">&amp;</span><span class="ident">drv</span>.<span class="ident">name</span>).<span class="ident">context</span>(<span class="ident">IoSnafu</span>)<span class="question-mark">?</span>;
+
+        <span class="kw">let</span> <span class="ident">absolute</span> <span class="op">=</span> <span class="ident">drv</span>.<span class="ident">path_in_store</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">source</span>, <span class="kw-2">&amp;</span><span class="ident">package_id</span>);
+
+        <span class="self">self</span>.<span class="ident">insert_source</span>(<span class="ident">package_id</span>, <span class="ident">drv</span>, <span class="ident">blobs</span>, <span class="ident">trees</span>, <span class="ident">absolute</span>, <span class="ident">Source::Local</span>(<span class="ident">path</span>))
+    }
+
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">extend</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw-2">mut</span> <span class="self">self</span>,
-        <span class="ident">packages</span>: <span class="kw">impl</span> <span class="ident">IntoIterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> (<span class="ident">Package</span>, <span class="ident">P</span>)<span class="op">&gt;</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>,
-    ) -&gt; <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">StoreResult</span><span class="op">&lt;</span><span class="ident">bool</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">+</span> <span class="lifetime">&#39;a</span> {
-        <span class="ident">packages</span>
-            .<span class="ident">into_iter</span>()
-            .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">package</span>, <span class="ident">path</span>)<span class="op">|</span> <span class="self">self</span>.<span class="ident">insert</span>(<span class="ident">package</span>, <span class="ident">path</span>))
-    }
-
-    <span class="doccomment">/// Links only the package at the specified path.</span>
-    <span class="doccomment">/// If the package itself has object linked to other packages,</span>
-    <span class="doccomment">/// link to the link.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">link_package</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">package_id</span>: <span class="kw-2">&amp;</span><span class="ident">PackageId</span>, <span class="ident">to</span>: <span class="kw-2">&amp;</span><span class="ident">ComponentPathBuf</span>) -&gt; <span class="ident">StoreResult</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">root</span> <span class="op">=</span> <span class="self">self</span>
-            .<span class="ident">packages</span>()
-            .<span class="ident">path_in_store</span>(<span class="ident">package_id</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">path</span>)
-            .<span class="ident">ok_or</span>(<span class="ident">StoreError::PackageNotFoundById</span> { <span class="ident">id</span>: <span class="kw-2">*</span><span class="ident">package_id</span> })<span class="question-mark">?</span>;
-
-        <span class="ident">to</span>.<span class="ident">create_dirs</span>().<span class="ident">context</span>(<span class="ident">IoSnafu</span>)<span class="question-mark">?</span>;
-
-        <span class="comment">// I checked beforehand if package is in scope</span>
-        <span class="kw">let</span> <span class="ident">object_ids</span> <span class="op">=</span> <span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">packages</span>().<span class="ident">get_children</span>(<span class="ident">package_id</span>).<span class="ident">unwrap_unchecked</span>() };
-
-        <span class="self">self</span>.<span class="ident">objects</span>()
-            .<span class="ident">read_objects</span>(<span class="ident">object_ids</span>, <span class="op">|</span><span class="ident">_id</span>, <span class="ident">object</span><span class="op">|</span> <span class="kw">match</span> <span class="ident">object</span>.<span class="ident">kind</span>() {
-                <span class="ident">ObjectKind::Blob</span> <span class="op">|</span> <span class="ident">ObjectKind::Link</span> =&gt; {
-                    <span class="kw">let</span> <span class="ident">absolute</span> <span class="op">=</span> <span class="ident">object</span>.<span class="ident">to_path</span>(<span class="kw-2">&amp;</span><span class="ident">root</span>);
-                    <span class="kw">let</span> <span class="ident">relative</span> <span class="op">=</span> <span class="ident">absolute</span>.<span class="ident">strip_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">root</span>).<span class="ident">context</span>(<span class="ident">StripPrefixSnafu</span>)<span class="question-mark">?</span>;
-
-                    <span class="kw">let</span> <span class="ident">dest</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">relative</span>.<span class="ident">starts_with</span>(<span class="string">&quot;bin/&quot;</span>) {
-                        <span class="ident">to</span>.<span class="ident">binary</span>
-                            .<span class="ident">join</span>(<span class="ident">relative</span>.<span class="ident">strip_prefix</span>(<span class="string">&quot;bin/&quot;</span>).<span class="ident">context</span>(<span class="ident">StripPrefixSnafu</span>)<span class="question-mark">?</span>)
-                    } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">relative</span>.<span class="ident">starts_with</span>(<span class="string">&quot;lib/&quot;</span>) {
-                        <span class="ident">to</span>.<span class="ident">library</span>
-                            .<span class="ident">join</span>(<span class="ident">relative</span>.<span class="ident">strip_prefix</span>(<span class="string">&quot;lib/&quot;</span>).<span class="ident">context</span>(<span class="ident">StripPrefixSnafu</span>)<span class="question-mark">?</span>)
-                    } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">relative</span>.<span class="ident">starts_with</span>(<span class="string">&quot;cfg/&quot;</span>) {
-                        <span class="ident">to</span>.<span class="ident">config</span>
-                            .<span class="ident">join</span>(<span class="ident">relative</span>.<span class="ident">strip_prefix</span>(<span class="string">&quot;cfg/&quot;</span>).<span class="ident">context</span>(<span class="ident">StripPrefixSnafu</span>)<span class="question-mark">?</span>)
-                    } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">relative</span>.<span class="ident">starts_with</span>(<span class="string">&quot;etc/&quot;</span>) {
-                        <span class="ident">to</span>.<span class="ident">config</span>
-                            .<span class="ident">join</span>(<span class="ident">relative</span>.<span class="ident">strip_prefix</span>(<span class="string">&quot;etc/&quot;</span>).<span class="ident">context</span>(<span class="ident">StripPrefixSnafu</span>)<span class="question-mark">?</span>)
-                    } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">relative</span>.<span class="ident">starts_with</span>(<span class="string">&quot;share/&quot;</span>) {
-                        <span class="ident">to</span>.<span class="ident">share</span>
-                            .<span class="ident">join</span>(<span class="ident">relative</span>.<span class="ident">strip_prefix</span>(<span class="string">&quot;share/&quot;</span>).<span class="ident">context</span>(<span class="ident">StripPrefixSnafu</span>)<span class="question-mark">?</span>)
-                    } <span class="kw">else</span> {
-                        <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">StoreError::UnsupportedFilePath</span> {
-                            <span class="ident">path</span>: <span class="ident">relative</span>.<span class="ident">to_owned</span>(),
-                        });
-                    };
-
-                    <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">parent</span>) <span class="op">=</span> <span class="ident">dest</span>.<span class="ident">parent</span>() <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="ident">parent</span>.<span class="ident">exists</span>() {
-                        <span class="ident">fs::create_dir_all</span>(<span class="ident">parent</span>).<span class="ident">context</span>(<span class="ident">IoSnafu</span>)<span class="question-mark">?</span>;
-                    }
-
-                    <span class="ident">unix::fs::symlink</span>(<span class="ident">absolute</span>, <span class="ident">dest</span>).<span class="ident">context</span>(<span class="ident">IoSnafu</span>)<span class="question-mark">?</span>;
-
-                    <span class="prelude-val">Ok</span>(())
-                }
-                <span class="kw">_</span> =&gt; <span class="prelude-val">Ok</span>(()),
-            })
-            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">StoreResult</span><span class="op">&lt;</span>()<span class="op">&gt;</span><span class="op">&gt;</span>()<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(())
-    }
-
-    <span class="doccomment">/// Links all the packages to the specified path.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">link_packages</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">indices</span>: <span class="kw">impl</span> <span class="ident">IntoIterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">PackageId</span><span class="op">&gt;</span>,
-        <span class="ident">to</span>: <span class="kw-2">&amp;</span><span class="ident">ComponentPathBuf</span>,
-    ) -&gt; <span class="ident">StoreResult</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
-        <span class="kw">for</span> <span class="ident">index</span> <span class="kw">in</span> <span class="ident">indices</span> {
-            <span class="self">self</span>.<span class="ident">link_package</span>(<span class="ident">index</span>, <span class="ident">to</span>)<span class="question-mark">?</span>;
-        }
-        <span class="prelude-val">Ok</span>(())
+        <span class="ident">packages</span>: <span class="kw">impl</span> <span class="ident">IntoIterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">LocalPackageSource</span><span class="op">&gt;</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>,
+    ) -&gt; <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">StoreResult</span><span class="op">&lt;</span><span class="ident">PathBuf</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">+</span> <span class="lifetime">&#39;a</span> {
+        <span class="ident">packages</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">src</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">insert</span>(<span class="ident">src</span>))
     }
 
     <span class="doccomment">/// Remove all packages that are currently unused in all generations.</span>
@@ -855,11 +1116,19 @@
             <span class="kw">for</span> <span class="ident">package_id</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">to_remove</span> {
                 <span class="kw">let</span> <span class="ident">root</span> <span class="op">=</span> <span class="kw">unsafe</span> {
                     <span class="self">self</span>.<span class="ident">packages</span>()
-                        .<span class="ident">path_in_store</span>(<span class="kw-2">&amp;</span><span class="ident">package_id</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">path</span>)
+                        .<span class="ident">path_in_store</span>(<span class="kw-2">&amp;</span><span class="ident">package_id</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">source</span>)
                         .<span class="ident">unwrap_unchecked</span>()
                 };
 
                 <span class="ident">fs::remove_dir_all</span>(<span class="ident">root</span>).<span class="ident">context</span>(<span class="ident">IoSnafu</span>)<span class="question-mark">?</span>;
+                <span class="kw">let</span> (<span class="ident">_desc</span>, <span class="ident">objects</span>) <span class="op">=</span>
+                    <span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">packages_mut</span>().<span class="ident">remove</span>(<span class="ident">package_id</span>).<span class="ident">unwrap_unchecked</span>() };
+                <span class="macro">assert!</span>(<span class="self">self</span>
+                    .<span class="ident">objects_mut</span>()
+                    .<span class="ident">remove_objects</span>(<span class="ident">objects</span>.<span class="ident">iter</span>())
+                    .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
+                    .<span class="ident">is_some</span>());
+
                 <span class="ident">bar</span>.<span class="ident">inc</span>(<span class="number">1</span>);
             }
 
@@ -868,34 +1137,40 @@
             <span class="kw">for</span> <span class="ident">package_id</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">to_remove</span> {
                 <span class="kw">let</span> <span class="ident">root</span> <span class="op">=</span> <span class="kw">unsafe</span> {
                     <span class="self">self</span>.<span class="ident">packages</span>()
-                        .<span class="ident">path_in_store</span>(<span class="kw-2">&amp;</span><span class="ident">package_id</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">path</span>)
+                        .<span class="ident">path_in_store</span>(<span class="kw-2">&amp;</span><span class="ident">package_id</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">source</span>)
                         .<span class="ident">unwrap_unchecked</span>()
                 };
 
                 <span class="ident">fs::remove_dir_all</span>(<span class="ident">root</span>).<span class="ident">context</span>(<span class="ident">IoSnafu</span>)<span class="question-mark">?</span>;
+                <span class="kw">let</span> (<span class="ident">_desc</span>, <span class="ident">objects</span>) <span class="op">=</span>
+                    <span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">packages_mut</span>().<span class="ident">remove</span>(<span class="ident">package_id</span>).<span class="ident">unwrap_unchecked</span>() };
+                <span class="macro">assert!</span>(<span class="self">self</span>
+                    .<span class="ident">objects_mut</span>()
+                    .<span class="ident">remove_objects</span>(<span class="ident">objects</span>.<span class="ident">iter</span>())
+                    .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>()
+                    .<span class="ident">is_some</span>());
             }
         }
 
         <span class="prelude-val">Ok</span>(<span class="ident">to_remove</span>)
     }
 
-    <span class="comment">// TODO maybe flush just after every io operation</span>
-
     <span class="doccomment">/// Flushes all data to the backend</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">flush</span>(<span class="self">self</span>) -&gt; <span class="ident">StoreResult</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
-        <span class="self">self</span>.<span class="ident">backend</span>.<span class="ident">flush</span>()
-    }
+        <span class="self">self</span>.<span class="ident">backend</span>.<span class="ident">flush</span>()<span class="question-mark">?</span>;
 
-    <span class="doccomment">/// The path of the store</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">path</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Path</span> {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">path</span>
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
 <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
 <span class="kw">mod</span> <span class="ident">tests</span> {
     <span class="kw">use</span> <span class="kw">super</span>::{<span class="ident">LocalStore</span>, <span class="ident">PACKAGES_DB</span>};
-    <span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">extra::path::ComponentPathBuf</span>, <span class="ident">support</span>::<span class="kw-2">*</span>, <span class="ident">user::UserManager</span>};
+    <span class="kw">use</span> <span class="kw">crate</span>::{
+        <span class="ident">extra</span>::{<span class="ident">hash</span>, <span class="ident">path::ComponentPathBuf</span>},
+        <span class="ident">support</span>::<span class="kw-2">*</span>,
+        <span class="ident">user::UserManager</span>,
+    };
     <span class="kw">use</span> <span class="ident">std</span>::{<span class="ident">fs</span>, <span class="ident">path::Path</span>};
     <span class="kw">use</span> <span class="ident">temp_dir::TempDir</span>;
 
@@ -955,9 +1230,10 @@
 
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">store</span> <span class="op">=</span> <span class="ident">store_create_at_path</span>(<span class="kw-2">&amp;</span><span class="ident">path</span>);
         <span class="kw">let</span> <span class="ident">package</span> <span class="op">=</span> <span class="ident">pkg</span>(<span class="string">&quot;package&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">package_path</span>);
-        <span class="kw">let</span> <span class="ident">package_store_path</span> <span class="op">=</span> <span class="ident">package</span>.<span class="ident">path_in_store</span>(<span class="ident">store</span>.<span class="ident">path</span>());
+        <span class="kw">let</span> <span class="ident">package_id</span> <span class="op">=</span> <span class="ident">hash::root_hash</span>(<span class="kw-2">&amp;</span><span class="ident">package</span>.<span class="ident">path</span>, <span class="kw-2">&amp;</span><span class="ident">package</span>.<span class="ident">name</span>()).<span class="ident">unwrap</span>();
+        <span class="kw">let</span> <span class="ident">package_store_path</span> <span class="op">=</span> <span class="ident">package</span>.<span class="ident">path_in_store</span>(<span class="ident">store</span>.<span class="ident">path</span>(), <span class="kw-2">&amp;</span><span class="ident">package_id</span>);
 
-        <span class="kw">let</span> <span class="kw">_</span> <span class="op">=</span> <span class="ident">store</span>.<span class="ident">insert</span>(<span class="ident">package</span>, <span class="ident">package_path</span>).<span class="ident">unwrap</span>();
+        <span class="kw">let</span> <span class="kw">_</span> <span class="op">=</span> <span class="ident">store</span>.<span class="ident">insert</span>(<span class="ident">package</span>).<span class="ident">unwrap</span>();
 
         <span class="macro">assert!</span>(<span class="ident">package_store_path</span>.<span class="ident">exists</span>());
         <span class="macro">assert!</span>(<span class="ident">package_store_path</span>.<span class="ident">is_dir</span>());
@@ -980,15 +1256,20 @@
         <span class="kw">let</span> <span class="ident">one</span> <span class="op">=</span> <span class="ident">pkg</span>(<span class="string">&quot;one&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">one_path</span>);
         <span class="kw">let</span> <span class="ident">two</span> <span class="op">=</span> <span class="ident">pkg</span>(<span class="string">&quot;two&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">two_path</span>);
 
-        <span class="kw">let</span> <span class="ident">two_id</span> <span class="op">=</span> <span class="ident">two</span>.<span class="ident">id</span>;
+        <span class="kw">let</span> <span class="ident">two_id</span> <span class="op">=</span> <span class="ident">hash::root_hash</span>(<span class="kw-2">&amp;</span><span class="ident">two</span>.<span class="ident">path</span>, <span class="kw-2">&amp;</span><span class="ident">two</span>.<span class="ident">name</span>()).<span class="ident">unwrap</span>();
         <span class="kw">let</span> <span class="ident">one_req</span> <span class="op">=</span> <span class="ident">req</span>(<span class="string">&quot;one&quot;</span>, <span class="string">&quot;&gt;0.0.0&quot;</span>);
 
-        <span class="ident">store</span>.<span class="ident">insert</span>(<span class="ident">one</span>, <span class="ident">one_path</span>).<span class="ident">unwrap</span>();
-        <span class="ident">store</span>.<span class="ident">insert</span>(<span class="ident">two</span>, <span class="ident">two_path</span>).<span class="ident">unwrap</span>();
+        <span class="ident">store</span>.<span class="ident">insert</span>(<span class="ident">one</span>).<span class="ident">unwrap</span>();
+        <span class="ident">store</span>.<span class="ident">insert</span>(<span class="ident">two</span>).<span class="ident">unwrap</span>();
+
+        <span class="kw">let</span> <span class="ident">global_temp</span> <span class="op">=</span> <span class="ident">temp_dir</span>.<span class="ident">child</span>(<span class="string">&quot;global&quot;</span>);
+        <span class="ident">fs::create_dir</span>(<span class="kw-2">&amp;</span><span class="ident">global_temp</span>).<span class="ident">unwrap</span>();
+        <span class="kw">let</span> <span class="ident">global_paths</span> <span class="op">=</span> <span class="ident">ComponentPathBuf::from_path</span>(<span class="kw-2">&amp;</span><span class="ident">global_temp</span>);
+        <span class="ident">global_paths</span>.<span class="ident">create_dirs</span>(<span class="bool-val">false</span>).<span class="ident">unwrap</span>();
 
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">user_manager</span> <span class="op">=</span> <span class="ident">UserManager::init</span>(<span class="kw-2">&amp;</span><span class="ident">user_manager_path</span>).<span class="ident">unwrap</span>();
         <span class="macro">assert!</span>(<span class="ident">user_manager</span>
-            .<span class="ident">insert_requirement</span>(<span class="ident">one_req</span>, <span class="kw-2">&amp;mut</span> <span class="ident">store</span>)
+            .<span class="ident">insert_requirement</span>(<span class="ident">one_req</span>, <span class="kw-2">&amp;mut</span> <span class="ident">store</span>, <span class="kw-2">&amp;</span><span class="ident">global_paths</span>)
             .<span class="ident">unwrap</span>());
 
         <span class="kw">let</span> <span class="ident">removed</span> <span class="op">=</span> <span class="ident">store</span>.<span class="ident">remove_unused</span>(<span class="kw-2">&amp;mut</span> <span class="ident">user_manager</span>).<span class="ident">unwrap</span>();
@@ -1020,15 +1301,15 @@
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">store</span> <span class="op">=</span> <span class="ident">store_create_at_path</span>(<span class="kw-2">&amp;</span><span class="ident">path</span>);
 
         <span class="kw">let</span> <span class="ident">package</span> <span class="op">=</span> <span class="ident">pkg</span>(<span class="string">&quot;package&quot;</span>, <span class="kw-2">&amp;</span><span class="ident">package_path</span>);
-        <span class="kw">let</span> <span class="ident">_package_store_path</span> <span class="op">=</span> <span class="ident">package</span>.<span class="ident">path_in_store</span>(<span class="ident">store</span>.<span class="ident">path</span>());
-        <span class="kw">let</span> <span class="ident">package_id</span> <span class="op">=</span> <span class="ident">package</span>.<span class="ident">id</span>;
+        <span class="kw">let</span> <span class="ident">package_id</span> <span class="op">=</span> <span class="ident">hash::root_hash</span>(<span class="kw-2">&amp;</span><span class="ident">package</span>.<span class="ident">path</span>, <span class="kw-2">&amp;</span><span class="ident">package</span>.<span class="ident">name</span>()).<span class="ident">unwrap</span>();
+        <span class="kw">let</span> <span class="ident">_package_store_path</span> <span class="op">=</span> <span class="ident">package</span>.<span class="ident">path_in_store</span>(<span class="ident">store</span>.<span class="ident">path</span>(), <span class="kw-2">&amp;</span><span class="ident">package_id</span>);
 
-        <span class="kw">let</span> <span class="kw">_</span> <span class="op">=</span> <span class="ident">store</span>.<span class="ident">insert</span>(<span class="ident">package</span>, <span class="ident">package_path</span>).<span class="ident">unwrap</span>();
+        <span class="kw">let</span> <span class="kw">_</span> <span class="op">=</span> <span class="ident">store</span>.<span class="ident">insert</span>(<span class="ident">package</span>).<span class="ident">unwrap</span>();
 
         <span class="kw">let</span> <span class="ident">global_temp_path</span> <span class="op">=</span> <span class="ident">temp_dir</span>.<span class="ident">child</span>(<span class="string">&quot;global&quot;</span>);
         <span class="ident">fs::create_dir</span>(<span class="kw-2">&amp;</span><span class="ident">global_temp_path</span>).<span class="ident">unwrap</span>();
         <span class="kw">let</span> <span class="ident">global_paths</span> <span class="op">=</span> <span class="ident">ComponentPathBuf::from_path</span>(<span class="kw-2">&amp;</span><span class="ident">global_temp_path</span>);
-        <span class="ident">global_paths</span>.<span class="ident">create_dirs</span>().<span class="ident">unwrap</span>();
+        <span class="ident">global_paths</span>.<span class="ident">create_dirs</span>(<span class="bool-val">true</span>).<span class="ident">unwrap</span>();
 
         <span class="ident">store</span>.<span class="ident">link_package</span>(<span class="kw-2">&amp;</span><span class="ident">package_id</span>, <span class="kw-2">&amp;</span><span class="ident">global_paths</span>).<span class="ident">unwrap</span>();
 
@@ -1038,5 +1319,5 @@
     }
 }
 </code></pre></div>
-</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="hua_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.62.0-nightly (52ca603da 2022-04-12)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="hua_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (1c7b36d4d 2022-07-12)" ></div>
 </body></html>

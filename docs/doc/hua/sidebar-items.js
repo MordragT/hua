@@ -1,1 +1,1 @@
-initSidebarItems({"constant":[["GLOBAL_PATH",""],["HUA_PATH",""],["USER_MANAGER_PATH",""]],"fn":[["main",""]]});
+window.SIDEBAR_ITEMS = {"constant":[["CONFIG_PATH",""],["REMOTE_TMP",""],["USER_MANAGER_PATH",""]],"fn":[["main",""]]};

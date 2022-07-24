@@ -1,1 +1,1 @@
-initSidebarItems({"fn":[["replace_by",""]]});
+window.SIDEBAR_ITEMS = {"fn":[["replace_by","Replaces a variable by another that is calculated by the `predicate`."]]};

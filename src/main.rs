@@ -90,11 +90,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some(("init", _)) => {
             if caps::has_cap(None, CapSet::Permitted, Capability::CAP_CHOWN)?
                 && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_OVERRIDE)?
-                && caps::has_cap(None, CapSet::Permitted, Capability::CAP_DAC_READ_SEARCH)?
             {
                 caps::raise(None, CapSet::Effective, Capability::CAP_CHOWN)?;
                 caps::raise(None, CapSet::Effective, Capability::CAP_DAC_OVERRIDE)?;
-                caps::raise(None, CapSet::Effective, Capability::CAP_DAC_READ_SEARCH)?;
             } else {
                 return Err(
                     "Please run hua init as root or with the appropiate capabilities".into(),
@@ -352,14 +350,15 @@ fn main() -> Result<(), Box<dyn Error>> {
             let blobs = unsafe { store.get_blobs_cloned_of_package(&id).unwrap_unchecked() };
             let req = (drv, blobs.collect()).into();
 
-            user_manager.insert_requirement(req, &store)?;
+            let global_paths = ComponentPathBuf::global();
+            user_manager.insert_requirement(req, &store, &global_paths)?;
 
             info!("Requirement for package added to current user");
 
-            let global_paths = ComponentPathBuf::global();
-            user_manager.switch_global_links(&global_paths)?;
+            // let global_paths = ComponentPathBuf::global();
+            // user_manager.switch_global_links(&global_paths)?;
 
-            info!("Global links switched to new generation");
+            //info!("Global links switched to new generation");
 
             user_manager.flush()?;
             store.flush()?;
@@ -406,10 +405,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let name = &names[selection];
                 let req = reqs[selection].clone();
 
-                user_manager.remove_requirement(&req, &store)?;
-
                 let global_paths = ComponentPathBuf::global();
-                user_manager.switch_global_links(&global_paths)?;
+                user_manager.remove_requirement(&req, &store, &global_paths)?;
+
+                // user_manager.switch_global_links(&global_paths)?;
 
                 user_manager.flush()?;
                 println!("{} {name} removed", style("Success").green());

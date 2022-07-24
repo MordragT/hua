@@ -1,1 +1,1 @@
-initSidebarItems({"attr":[["derive_where","Item-level options:"]]});
+window.SIDEBAR_ITEMS = {"attr":[["derive_where","Item-level options:"]]};

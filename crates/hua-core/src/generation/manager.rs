@@ -93,6 +93,7 @@ impl GenerationManager {
         &mut self,
         requirement: Requirement,
         store: &Store<PathBuf, B>,
+        global_paths: &ComponentPathBuf,
     ) -> GenerationResult<bool> {
         if self.get_current().contains_requirement(&requirement) {
             Ok(false)
@@ -112,6 +113,7 @@ impl GenerationManager {
             assert!(old.is_none());
 
             self.current = self.counter;
+            self.switch_global_links(global_paths)?;
             Ok(true)
         }
     }
@@ -120,6 +122,7 @@ impl GenerationManager {
         &mut self,
         requirement: &Requirement,
         store: &Store<PathBuf, B>,
+        global_paths: &ComponentPathBuf,
     ) -> GenerationResult<bool> {
         if self.get_current().contains_requirement(requirement) {
             self.counter += 1;
@@ -137,6 +140,7 @@ impl GenerationManager {
             assert!(old.is_none());
 
             self.current = self.counter;
+            self.switch_global_links(global_paths)?;
             Ok(true)
         } else {
             Ok(false)

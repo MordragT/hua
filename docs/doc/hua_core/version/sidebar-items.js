@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["Version","SemVer version as defined by https://semver.org."],["VersionReq","SemVer version requirement describing the intersection of some version comparators, such as `>=1.2.3, <1.8`."]]});
+window.SIDEBAR_ITEMS = {"struct":[["Version","SemVer version as defined by https://semver.org."],["VersionReq","SemVer version requirement describing the intersection of some version comparators, such as `>=1.2.3, <1.8`."]]};

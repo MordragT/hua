@@ -1,1 +1,0 @@
-initSidebarItems({"enum":[["CFFIError",""]],"fn":[["build_recipe",""]],"struct":[["CRecipe",""],["CRequirement",""],["CStringTuple",""]]});

@@ -133,10 +133,11 @@ impl UserManager {
         &mut self,
         requirement: Requirement,
         store: &Store<PathBuf, B>,
+        global_paths: &ComponentPathBuf,
     ) -> UserResult<bool> {
         Ok(self
             .current_generation_manager_mut()
-            .insert_requirement(requirement, store)
+            .insert_requirement(requirement, store, global_paths)
             .context(GenerationSnafu)?)
     }
 
@@ -147,10 +148,11 @@ impl UserManager {
         &mut self,
         requirement: &Requirement,
         store: &Store<PathBuf, B>,
+        global_paths: &ComponentPathBuf,
     ) -> UserResult<bool> {
         Ok(self
             .current_generation_manager_mut()
-            .remove_requirement(requirement, store)
+            .remove_requirement(requirement, store, global_paths)
             .context(GenerationSnafu)?)
     }
 
@@ -191,7 +193,7 @@ impl UserManager {
     }
 
     /// Unlinks the old generation and links the new one globally
-    pub fn switch_global_links(&mut self, global_paths: &ComponentPathBuf) -> UserResult<()> {
+    fn switch_global_links(&mut self, global_paths: &ComponentPathBuf) -> UserResult<()> {
         Ok(self
             .current_generation_manager_mut()
             .switch_global_links(global_paths)
@@ -304,8 +306,15 @@ mod tests {
         let one = pkg("one", &one_path);
         store.insert(one).unwrap();
 
+        let global_temp = temp_dir.child("global");
+        fs::create_dir(&global_temp).unwrap();
+        let global_paths = ComponentPathBuf::from_path(&global_temp);
+        global_paths.create_dirs(false).unwrap();
+
         let req = req("one", ">0.0.1");
-        let res = user_manager.insert_requirement(req, &store).unwrap();
+        let res = user_manager
+            .insert_requirement(req, &store, &global_paths)
+            .unwrap();
 
         assert!(res);
     }
@@ -324,11 +333,18 @@ mod tests {
         let one = pkg("one", &one_path);
         store.insert(one).unwrap();
 
+        let global_temp = temp_dir.child("global");
+        fs::create_dir(&global_temp).unwrap();
+        let global_paths = ComponentPathBuf::from_path(&global_temp);
+        global_paths.create_dirs(false).unwrap();
+
         let req = req("one", ">0.0.1");
         let _ = user_manager
-            .insert_requirement(req.clone(), &store)
+            .insert_requirement(req.clone(), &store, &global_paths)
             .unwrap();
-        let res = user_manager.insert_requirement(req, &store).unwrap();
+        let res = user_manager
+            .insert_requirement(req, &store, &global_paths)
+            .unwrap();
 
         assert!(!res);
     }
@@ -343,8 +359,15 @@ mod tests {
         let store_path = temp_dir.child("store");
         let store = LocalStore::init(&store_path).unwrap();
 
+        let global_temp = temp_dir.child("global");
+        fs::create_dir(&global_temp).unwrap();
+        let global_paths = ComponentPathBuf::from_path(&global_temp);
+        global_paths.create_dirs(false).unwrap();
+
         let req = req("one", ">0.0.1");
-        let res = user_manager.insert_requirement(req, &store).unwrap_err();
+        let res = user_manager
+            .insert_requirement(req, &store, &global_paths)
+            .unwrap_err();
 
         assert_matches!(res, UserError::GenerationError { source: _ });
     }
@@ -363,11 +386,18 @@ mod tests {
         let one = pkg("one", &one_path);
         store.insert(one).unwrap();
 
+        let global_temp = temp_dir.child("global");
+        fs::create_dir(&global_temp).unwrap();
+        let global_paths = ComponentPathBuf::from_path(&global_temp);
+        global_paths.create_dirs(false).unwrap();
+
         let req = req("one", ">0.0.1");
         let _ = user_manager
-            .insert_requirement(req.clone(), &store)
+            .insert_requirement(req.clone(), &store, &global_paths)
             .unwrap();
-        let res = user_manager.remove_requirement(&req, &store).unwrap();
+        let res = user_manager
+            .remove_requirement(&req, &store, &global_paths)
+            .unwrap();
 
         assert!(res);
     }
@@ -382,8 +412,15 @@ mod tests {
         let store_path = temp_dir.child("store");
         let store = LocalStore::init(&store_path).unwrap();
 
+        let global_temp = temp_dir.child("global");
+        fs::create_dir(&global_temp).unwrap();
+        let global_paths = ComponentPathBuf::from_path(&global_temp);
+        global_paths.create_dirs(false).unwrap();
+
         let req = req("one", ">0.0.1");
-        let res = user_manager.remove_requirement(&req, &store).unwrap();
+        let res = user_manager
+            .remove_requirement(&req, &store, &global_paths)
+            .unwrap();
 
         assert!(!res);
     }
@@ -402,8 +439,15 @@ mod tests {
         let one = pkg("one", &one_path);
         store.insert(one).unwrap();
 
+        let global_temp = temp_dir.child("global");
+        fs::create_dir(&global_temp).unwrap();
+        let global_paths = ComponentPathBuf::from_path(&global_temp);
+        global_paths.create_dirs(false).unwrap();
+
         let req = req("one", ">0.0.1");
-        let _ = user_manager.insert_requirement(req, &store).unwrap();
+        let _ = user_manager
+            .insert_requirement(req, &store, &global_paths)
+            .unwrap();
 
         let res = user_manager.remove_generation(0).unwrap();
 
@@ -444,14 +488,15 @@ mod tests {
         let one = pkg("one", &one_path);
         store.insert(one).unwrap();
 
+        let global_temp = temp_dir.child("global");
+        fs::create_dir(&global_temp).unwrap();
+        let global_paths = ComponentPathBuf::from_path(&global_temp);
+        global_paths.create_dirs(false).unwrap();
+
         let req = req("one", ">0.0.1");
-        let _ = user_manager.insert_requirement(req, &store).unwrap();
-
-        let global_path = temp_dir.child("global");
-        fs::create_dir(&global_path).unwrap();
-
-        let global_paths = ComponentPathBuf::from_path(global_path);
-        global_paths.create_dirs(true).unwrap();
+        let _ = user_manager
+            .insert_requirement(req, &store, &global_paths)
+            .unwrap();
 
         user_manager.switch_global_links(&global_paths).unwrap();
 
@@ -487,8 +532,15 @@ mod tests {
         let one_id = hash::root_hash(&one.path, &one.name()).unwrap();
         let _ = store.insert(one).unwrap();
 
+        let global_temp = temp_dir.child("global");
+        fs::create_dir(&global_temp).unwrap();
+        let global_paths = ComponentPathBuf::from_path(&global_temp);
+        global_paths.create_dirs(false).unwrap();
+
         let req = req("one", ">0.0.1");
-        let _ = user_manager.insert_requirement(req, &store).unwrap();
+        let _ = user_manager
+            .insert_requirement(req, &store, &global_paths)
+            .unwrap();
 
         let res = user_manager.contains(&one_id);
 

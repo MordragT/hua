@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["LocalBackend",""]],"trait":[["Backend",""]]});
+window.SIDEBAR_ITEMS = {"struct":[["LocalBackend",""],["MemoryBackend",""],["RemoteBackend",""]],"trait":[["ReadBackend",""],["WriteBackend",""]]};

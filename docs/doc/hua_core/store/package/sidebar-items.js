@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["Package",""],["PackageDesc",""],["Packages",""]]});
+window.SIDEBAR_ITEMS = {"struct":[["LocalPackageSource",""],["Packages",""],["RemotePackageSource",""]]};

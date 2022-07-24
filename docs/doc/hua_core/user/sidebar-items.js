@@ -1,1 +1,1 @@
-initSidebarItems({"enum":[["UserError",""]],"struct":[["User","A single User who owns several generations."],["UserManager","Manages all users."]]});
+window.SIDEBAR_ITEMS = {"enum":[["UserError",""]],"struct":[["User","A single User who owns several generations."],["UserManager","Manages all users."]]};

@@ -1,1 +1,1 @@
-initSidebarItems({"trait":[["DeSerializer","A trait to bundle serializer and deserializer in a simple struct"]]});
+window.SIDEBAR_ITEMS = {"trait":[["DeSerializer","A trait to bundle serializer and deserializer in a simple struct"]]};

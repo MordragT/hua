@@ -1,1 +1,1 @@
-initSidebarItems({"enum":[["Bind",""]],"struct":[["JailBuilder",""]]});
+window.SIDEBAR_ITEMS = {"enum":[["Bind",""]],"struct":[["JailBuilder",""]]};
