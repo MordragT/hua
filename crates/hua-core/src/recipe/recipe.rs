@@ -145,6 +145,8 @@ impl Recipe {
             .write(self.drv.script.as_bytes())
             .context(IoSnafu)?;
 
+        temp_dir.leak();
+
         debug!("Written temprorary script file {script_path:?}");
 
         let mut process = jail
