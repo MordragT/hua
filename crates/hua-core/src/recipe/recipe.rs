@@ -137,7 +137,7 @@ impl Recipe {
     pub fn build(mut self) -> RecipeResult<Self> {
         let jail = self.jail.ok_or(RecipeError::MissingJail)?;
         let build_dir = self.build_dir.ok_or(RecipeError::MissingSourceFiles)?;
-        let temp_dir = self.temp_dir.as_ref().ok_or(RecipeError::MissingTempDir)?;
+        let temp_dir = self.temp_dir.ok_or(RecipeError::MissingTempDir)?;
 
         let script_path = temp_dir.child(&self.drv.name);
         let mut script_file = File::create(&script_path).context(IoSnafu)?;
@@ -164,6 +164,7 @@ impl Recipe {
 
         debug!("Calculated absolute dir {absolute_target_dir:?}");
 
+        self.temp_dir = None;
         self.build_dir = None;
         self.jail = None;
         self.absolute_target_dir = Some(absolute_target_dir);
@@ -178,7 +179,15 @@ impl Recipe {
         let package_source = LocalPackageSource::new(self.drv, absolute_target_dir);
 
         let path = store.insert(package_source).context(StoreSnafu)?;
-        let link = PathBuf::from("result");
+        let path = path.canonicalize().unwrap();
+
+        info!("Package inserted in store {path:?}");
+
+        let link = std::env::current_dir().unwrap().join("result");
+        //let link = link.canonicalize().unwrap();
+
+        debug!("Calculated link path at {link:?}");
+
         unix::fs::symlink(&path, &link).context(IoSnafu)?;
 
         info!("Created result link");
