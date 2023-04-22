@@ -1,72 +1,74 @@
 {
   inputs = {
     utils.url = "github:numtide/flake-utils";
-    naersk.url = "github:nmattia/naersk";
     fenix.url = "github:nix-community/fenix";
   };
 
-  outputs = { self, nixpkgs, utils, naersk, fenix }: let
-    overlay = (final: prev: {
-      hua = prev.callPackage (import ./default.nix) {
-        inherit naersk fenix;
+  outputs = { self, nixpkgs, utils, fenix }:
+    let
+      overlay = (final: prev: {
+        hua = prev.callPackage (import ./default.nix) {
+          inherit fenix;
+        };
+      });
+    in
+    utils.lib.eachDefaultSystem
+      (system:
+        let
+          pkgs = import nixpkgs {
+            overlays = [ fenix.overlays.default ];
+            inherit system;
+          };
+          toolchain = pkgs.fenix.complete;
+        in
+        rec {
+          # `nix build`
+          packages.hua = (pkgs.makeRustPlatform {
+            # Use nightly rustc and cargo provided by fenix for building
+            inherit (toolchain) cargo rustc;
+          }).buildRustPackage {
+            pname = "hua";
+            version = "0.1.0";
+            src = ./.;
+            cargoLock.lockFile = ./Cargo.lock;
+
+            buildInputs = with pkgs; [
+              openssl
+              pkgconfig
+              bubblewrap
+            ];
+            meta = with pkgs.lib; {
+              description = "Hua package manager";
+            };
+
+            # For other makeRustPlatform features see: 
+            # https://github.com/NixOS/nixpkgs/blob/master/doc/languages-frameworks/rust.section.md#cargo-features-cargo-features
+          };
+          packages.default = packages.hua;
+
+          apps.hua = utils.lib.mkApp {
+            drv = packages.hua;
+          };
+          apps.default = apps.hua;
+
+          devShells.default = pkgs.mkShell {
+            nativeBuildInputs = with pkgs; [
+              (with toolchain; [
+                cargo
+                rustc
+                rust-src
+                clippy
+                rustfmt
+              ])
+              openssl
+              pkgconfig
+              bubblewrap
+              just
+            ];
+          };
+        }) // {
+      overlays.default = this: pkgs: {
+        hua = self.packages."${pkgs.system}".default;
       };
-    });
-  in { overlay = overlay; } // utils.lib.eachDefaultSystem (system: let
-    pkgs = nixpkgs.legacyPackages."${system}";
-    naersk-lib = naersk.lib."${system}";
-    toolchain = fenix.packages.${system}.complete;
-    llvmPkgs = pkgs.llvmPackages_12;
-  in rec {
-    # `nix build`
-    packages.hua = import ./default.nix {
-      inherit system;
-      inherit (nixpkgs) lib;
-      inherit pkgs;
-      inherit naersk fenix;
     };
-      
-    defaultPackage = packages.hua;
-
-    # `nix run`
-    apps.hua = utils.lib.mkApp {
-      drv = packages.hua;
-    };
-    defaultApp = apps.hua;
-
-    # `nix develop`
-    devShell = pkgs.mkShell {
-      # LLVM_SYS_120_PREFIX = "${llvmPkgs.llvm.dev}";
-      # NIX_GLIBC_PATH = if pkgs.stdenv.isLinux then "${pkgs.glibc_multi.out}/lib" else "";
-      # RUST_SRC_PATH = "${complete.rust-src}/lib/rustlib/src/rust/src";
-      # LD_LIBRARY_PATH = with pkgs;
-      #   lib.makeLibraryPath
-      #   [ pkg-config stdenv.cc.cc.lib libffi ncurses zlib ];
-
-      # for pam-client which uses bindgen source
-      # LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-
-      nativeBuildInputs = with pkgs; [
-        (toolchain.withComponents [
-          "cargo" "rustc" "rust-src" "rustfmt" "clippy"    
-        ])
-        # xorg.libxcb
-        openssl
-        pkgconfig
-        bubblewrap
-        # llvmPkgs.clang
-        # llvmPkgs.lld
-        # llvmPkgs.llvm.dev
-        # lldb
-        zig
-        just
-
-        # linux-pam
-        # (pkgs.writeShellScriptBin "roc" ''
-        #   #!/usr/bin/env sh
-
-        #   $HOME/.cargo/bin/roc $@
-        # '')
-      ];
-    };
-  });
 }

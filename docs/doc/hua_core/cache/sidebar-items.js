@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"struct":[["Cache","Fetches and manages resources in a local cache directory."],["CacheBuilder","Builder to facilitate creating [`Cache`] objects."],["Options","Options to use with [`Cache::cached_path_with_options`]."]]};

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":[["DependencyError","All Errors that occur in this module"]],"struct":[["DependencyGraph","A directed acyclic graph for dependency resolution."],["Requirement","A Requirement to be resolved by the [super::DependencyGraph]."]]};

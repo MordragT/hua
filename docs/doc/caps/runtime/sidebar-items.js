@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":[["ambient_set_supported","Check whether the running kernel supports the ambient set."],["procfs_all_supported","Return the set of all capabilities supported by the running kernel."],["thread_all_supported","Return the set of all capabilities supported on the current thread."]]};

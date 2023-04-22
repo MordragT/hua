@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"derive":[["Snafu","The `Snafu` macro is the entrypoint to defining your own error types. It is designed to require little configuration for the recommended and typical usecases while still offering flexibility for unique situations."]]};

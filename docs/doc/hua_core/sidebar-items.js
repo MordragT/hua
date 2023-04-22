@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":[["GID",""],["HUA_PATH",""],["UID",""]],"mod":[["cache",""],["config",""],["dependency",""],["extra",""],["generation",""],["jail",""],["recipe",""],["shell",""],["store",""],["url",""],["user",""],["version",""]]};

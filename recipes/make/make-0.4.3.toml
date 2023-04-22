@@ -1,0 +1,15 @@
+name = "make-bin"
+version = "0.4.3-3"
+description = "GNU make utility to maintain groups of programs"
+architectures = [
+    "x86_64"
+]
+os = [
+    "linux"
+]
+sources = [
+    "https://ftp5.gwdg.de/pub/linux/archlinux/core/os/x86_64/make-4.3-3-x86_64.pkg.tar.zst"
+]
+licenses = [ "GPLv3" ]
+requires = []
+script_path = "make.nu"

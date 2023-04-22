@@ -459,7 +459,7 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
 
                 fs::remove_dir_all(root).context(IoSnafu)?;
                 let (_desc, objects) =
-                    unsafe { self.packages_mut().remove(package_id).unwrap_unchecked() };
+                    unsafe { self.packages_mut().remove(&package_id).unwrap_unchecked() };
                 assert!(self
                     .objects_mut()
                     .remove_objects(objects.iter())
@@ -480,7 +480,7 @@ impl<B: WriteBackend<Source = PathBuf> + ReadBackend<Source = PathBuf>, const BA
 
                 fs::remove_dir_all(root).context(IoSnafu)?;
                 let (_desc, objects) =
-                    unsafe { self.packages_mut().remove(package_id).unwrap_unchecked() };
+                    unsafe { self.packages_mut().remove(&package_id).unwrap_unchecked() };
                 assert!(self
                     .objects_mut()
                     .remove_objects(objects.iter())
@@ -567,7 +567,7 @@ mod tests {
 
         let mut store = store_create_at_path(&path);
         let package = pkg("package", &package_path);
-        let package_id = hash::root_hash(&package.path, &package.name()).unwrap();
+        let package_id = hash::root_hash(&package.path, package.name()).unwrap();
         let package_store_path = package.path_in_store(store.path(), &package_id);
 
         let _ = store.insert(package).unwrap();
@@ -593,7 +593,7 @@ mod tests {
         let one = pkg("one", &one_path);
         let two = pkg("two", &two_path);
 
-        let two_id = hash::root_hash(&two.path, &two.name()).unwrap();
+        let two_id = hash::root_hash(&two.path, two.name()).unwrap();
         let one_req = req("one", ">0.0.0");
 
         store.insert(one).unwrap();
@@ -638,7 +638,7 @@ mod tests {
         let mut store = store_create_at_path(&path);
 
         let package = pkg("package", &package_path);
-        let package_id = hash::root_hash(&package.path, &package.name()).unwrap();
+        let package_id = hash::root_hash(&package.path, package.name()).unwrap();
         let _package_store_path = package.path_in_store(store.path(), &package_id);
 
         let _ = store.insert(package).unwrap();

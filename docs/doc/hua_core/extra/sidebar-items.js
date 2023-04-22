@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":[["exact_version_req","Returns the exact [VersionReq] of a [Version]."]],"mod":[["fs","Filesystem manipulation operations."],["hash","Hashing operations."],["mem","Memory operations."],["path","Path manipulation."],["persist","[serde] persistation."],["str","Unicode string slice operations."],["style","Styling."]]};

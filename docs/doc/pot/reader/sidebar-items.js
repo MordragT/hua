@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"struct":[["IoReader","A reader over [`ReadBytesExt`]."],["SliceReader","Reads data from a slice."]],"trait":[["Reader","A reader that can temporarily buffer bytes read."]]};

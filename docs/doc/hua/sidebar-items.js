@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":[["CONFIG_PATH",""],["REMOTE_TMP",""],["USER_MANAGER_PATH",""]],"fn":[["main",""]]};

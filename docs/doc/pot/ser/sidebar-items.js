@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"struct":[["MapSerializer","Serializes map-like values."],["Serializer","A Pot serializer."],["SymbolMap","A list of previously serialized symbols."]]};

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"struct":[["UsersCache","A producer of user and group instances that caches every result."]]};

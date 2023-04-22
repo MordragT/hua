@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":[["parse_hex","Parses a [str] of hexadecimal numbers into a [Vec]"]]};
